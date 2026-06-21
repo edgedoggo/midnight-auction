@@ -7,6 +7,7 @@ const TIMER_SETTING = "timerMode";
 const DEFAULT_INCREMENT_SETTING = "defaultIncrement";
 const NPC_BID_INCREMENT_SETTING = "npcBidIncrement";
 const NPC_BIDDERS_SETTING = "npcBidders";
+const ROUND_COUNT_SETTING = "roundCount";
 const SCENE_IMAGES_SETTING = "sceneImages";
 const FLOAT_POSITION_SETTING = "floatingButtonPosition";
 
@@ -55,23 +56,7 @@ function defaultNpcBidders() {
 
 function defaultCatalog() {
   return {
-    rounds: [
-      {
-        id: randomId(),
-        number: 1,
-        title: "Round 1",
-        items: [
-          {
-            id: randomId(),
-            name: "Velvet-Wrapped Curiosity",
-            img: "icons/commodities/treasure/trinket-wing-white.webp",
-            description: "A mysterious first lot. Rename it, set a price, and start the bidding.",
-            startingPrice: 10,
-            increment: 5
-          }
-        ]
-      }
-    ]
+    rounds: buildRounds()
   };
 }
 
@@ -81,8 +66,37 @@ function getState() {
 
 function getCatalog() {
   const catalog = foundry.utils.deepClone(game.settings.get(MODULE_ID, CATALOG_SETTING) ?? {});
-  if (!Array.isArray(catalog.rounds) || !catalog.rounds.length) return defaultCatalog();
-  return catalog;
+  return normalizeCatalog(catalog);
+}
+
+function configuredRoundCount() {
+  let configured = 4;
+  try {
+    configured = Number(game.settings.get(MODULE_ID, ROUND_COUNT_SETTING)) || 4;
+  } catch (_err) {
+    configured = 4;
+  }
+  const count = configured;
+  return Math.max(1, Math.min(10, count));
+}
+
+function buildRounds() {
+  return Array.from({ length: configuredRoundCount() }, (_value, index) => ({
+    id: `round-${index + 1}`,
+    number: index + 1,
+    title: `Round ${index + 1}`,
+    items: []
+  }));
+}
+
+function normalizeCatalog(catalog) {
+  const sourceRounds = Array.isArray(catalog.rounds) ? catalog.rounds : [];
+  const rounds = buildRounds();
+  for (const round of rounds) {
+    const existing = sourceRounds.find((candidate) => Number(candidate.number) === round.number || candidate.id === round.id);
+    if (existing) round.items = Array.isArray(existing.items) ? existing.items : [];
+  }
+  return { rounds };
 }
 
 function getNpcBidders() {
@@ -407,9 +421,6 @@ class MidnightAuctionApp extends Application {
     html.find("[data-action='refresh']").on("click", () => this.render(false));
     html.find("[data-action='stop-auction']").on("click", () => this._onStopAuction());
     html.find("[data-action='select-round']").on("click", (event) => this._onSelectRound(event));
-    html.find("[data-action='add-round']").on("click", () => this._onAddRound());
-    html.find("[data-action='delete-round']").on("click", (event) => this._onDeleteRound(event));
-    html.find("[data-action='add-item']").on("click", (event) => this._onAddItem(event));
     html.find("[data-action='delete-item']").on("click", (event) => this._onDeleteItem(event));
     html.find("[data-action='start-round']").on("click", (event) => this._onStartRound(event));
     html.find("[data-action='end-round']").on("click", (event) => this._onEndRound(event));
@@ -421,6 +432,8 @@ class MidnightAuctionApp extends Application {
     html.find("[data-npc-field]").on("change", (event) => this._onNpcFieldChange(event));
     html.find("[data-npc-index]").on("dragover", (event) => event.preventDefault());
     html.find("[data-npc-index]").on("drop", (event) => this._onNpcDrop(event));
+    html.find("[data-round-drop]").on("dragover", (event) => event.preventDefault());
+    html.find("[data-round-drop]").on("drop", (event) => this._onRoundDrop(event));
   }
 
   async _render(...args) {
@@ -458,51 +471,32 @@ class MidnightAuctionApp extends Application {
     this.render(false);
   }
 
-  async _onAddRound() {
+  async _onAddItem(roundId, itemDocument = null) {
     if (!game.user.isGM) return;
-    const catalog = getCatalog();
-    const nextNumber = Math.max(0, ...catalog.rounds.map((round) => Number(round.number) || 0)) + 1;
-    const round = {
-      id: randomId(),
-      number: nextNumber,
-      title: `Round ${nextNumber}`,
-      items: []
-    };
-    catalog.rounds.push(round);
-    this._selectedRoundId = round.id;
-    await setCatalog(catalog);
-  }
-
-  async _onDeleteRound(event) {
-    if (!game.user.isGM) return;
-    const roundId = event.currentTarget.dataset.roundId;
-    const catalog = getCatalog();
-    catalog.rounds = catalog.rounds.filter((round) => round.id !== roundId);
-    if (!catalog.rounds.length) catalog.rounds = defaultCatalog().rounds;
-    if (this._selectedRoundId === roundId) this._selectedRoundId = catalog.rounds[0]?.id ?? null;
-
-    const state = getState();
-    if (state.roundId === roundId) await setState(defaultState(), { ping: false });
-    await setCatalog(catalog);
-  }
-
-  async _onAddItem(event) {
-    if (!game.user.isGM) return;
-    const roundId = event.currentTarget.dataset.roundId;
     const catalog = getCatalog();
     const round = findRound(catalog, roundId);
     if (!round) return;
 
+    const itemData = itemDocument ? this._lotFromItem(itemDocument) : null;
     round.items.push({
       id: randomId(),
-      name: "New Auction Lot",
-      img: "icons/svg/item-bag.svg",
+      name: itemData?.name || "New Auction Lot",
+      img: itemData?.img || "icons/svg/item-bag.svg",
       sceneImg: "",
-      description: "Describe this lot for your bidders.",
-      startingPrice: 10,
+      description: itemData?.description || "Describe this lot for your bidders.",
+      startingPrice: itemData?.startingPrice ?? 10,
       increment: Number(game.settings.get(MODULE_ID, DEFAULT_INCREMENT_SETTING)) || 10
     });
     await setCatalog(catalog);
+  }
+
+  _lotFromItem(item) {
+    return {
+      name: item.name,
+      img: item.img || "icons/svg/item-bag.svg",
+      description: foundry.utils.getProperty(item, "system.description.value") || "",
+      startingPrice: Number(foundry.utils.getProperty(item, "system.price.value")) || 0
+    };
   }
 
   async _onDeleteItem(event) {
@@ -516,6 +510,27 @@ class MidnightAuctionApp extends Application {
     const state = getState();
     if (state.itemId === itemId) await setState(defaultState(), { ping: false });
     await setCatalog(catalog);
+  }
+
+  async _onRoundDrop(event) {
+    if (!game.user.isGM) return;
+    event.preventDefault();
+    const roundId = event.currentTarget.dataset.roundDrop;
+    let data = null;
+    try {
+      data = JSON.parse(event.originalEvent?.dataTransfer?.getData("text/plain") || event.dataTransfer?.getData("text/plain") || "{}");
+    } catch (_err) {
+      return;
+    }
+
+    const document = data.uuid ? await fromUuid(data.uuid) : null;
+    if (!document || document.documentName !== "Item") {
+      ui.notifications.warn("Drop an Item onto the round to add it as an auction lot.");
+      return;
+    }
+
+    await this._onAddItem(roundId, document);
+    this._selectedRoundId = roundId;
   }
 
   async _onStartRound(event) {
@@ -839,6 +854,28 @@ Hooks.once("init", () => {
     config: false,
     type: Object,
     default: defaultNpcBidders()
+  });
+
+  game.settings.register(MODULE_ID, ROUND_COUNT_SETTING, {
+    name: "Auction Rounds",
+    hint: "How many fixed round tabs the GM sees, from 1 to 10.",
+    scope: "world",
+    config: true,
+    type: Number,
+    choices: {
+      1: "1 round",
+      2: "2 rounds",
+      3: "3 rounds",
+      4: "4 rounds",
+      5: "5 rounds",
+      6: "6 rounds",
+      7: "7 rounds",
+      8: "8 rounds",
+      9: "9 rounds",
+      10: "10 rounds"
+    },
+    default: 4,
+    onChange: () => renderAuctionApps()
   });
 
   game.settings.register(MODULE_ID, SCENE_IMAGES_SETTING, {

@@ -296,37 +296,33 @@
 }
 
 .ma-round header {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto minmax(220px, 1fr);
   gap: 12px;
   align-items: center;
   padding: 10px;
   border-bottom: 1px solid var(--ma-line);
 }
 
-.ma-round-title {
-  display: grid;
-  grid-template-columns: 78px minmax(180px, 1fr);
-  gap: 8px;
-  align-items: end;
-  flex: 1;
-}
-
-.ma-round-title label,
 .ma-description-field {
   font-size: 11px;
-}
-
-.ma-round-title input {
-  width: 100%;
-  height: 28px;
 }
 
 .ma-round-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  justify-content: flex-end;
+}
+
+.ma-drop-zone {
+  min-height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--ma-line);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.2);
+  font-size: 12px;
+  opacity: 0.82;
 }
 
 .ma-lots {
@@ -397,6 +393,12 @@
   gap: 6px;
 }
 
+.ma-delete-item {
+  width: 28px;
+  justify-self: end;
+  font-weight: 700;
+}
+
 .ma-log {
   padding: 10px;
 }
@@ -453,14 +455,13 @@
     display: flex;
   }
 
-  .ma-lot-fields-wide,
-  .ma-round-title {
+  .ma-lot-fields-wide {
     grid-template-columns: 1fr;
   }
 
   .ma-round header {
     align-items: stretch;
-    flex-direction: column;
+    grid-template-columns: 1fr;
   }
 
   .ma-npc-list,
