@@ -28,7 +28,7 @@ jobs:
         run: |
           mkdir -p dist/midnight-auction
           cp README.md module.json dist/midnight-auction/
-          cp -R scripts styles templates dist/midnight-auction/
+          cp -R scripts styles templates packs dist/midnight-auction/
           cd dist
           zip -r midnight-auction.zip midnight-auction
           cp ../module.json module.json

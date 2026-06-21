@@ -1,0 +1,1 @@
+{"_id":"midnightauction01","name":"Open Midnight Auction","type":"script","img":"icons/tools/scribal/scroll-blue.webp","command":"game.modules.get(\"midnight-auction\").api.open();","folder":null,"sort":0,"ownership":{"default":3},"flags":{}}

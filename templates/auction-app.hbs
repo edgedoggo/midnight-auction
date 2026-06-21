@@ -33,7 +33,11 @@
     </div>
     <div class="ma-highest-card">
       <span>Highest Bidder</span>
+      {{#if highestBidder.img}}
+      <img class="ma-bidder-avatar" src="{{highestBidder.img}}" alt="{{highestBidder.name}}">
+      {{else}}
       <div class="ma-bidder-avatar" style="background: {{highestBidder.avatarStyle}}">{{highestBidder.initial}}</div>
+      {{/if}}
       <strong>{{highestBidder.name}}</strong>
     </div>
     <div class="ma-price">
@@ -49,7 +53,9 @@
       <strong>{{gold}} gp</strong>
     </div>
     <button class="ma-bid" type="button" data-action="bid" {{#unless canBid}}disabled{{/unless}}>
+      {{#if showBidProgress}}
       <span class="ma-bid-progress is-{{timerTone}}" style="width: {{timerProgress}}%"></span>
+      {{/if}}
       <strong>{{bidLabel}}</strong>
     </button>
     <div class="ma-timer {{#if urgent}}is-urgent{{/if}}">
@@ -76,9 +82,12 @@
       <div class="ma-panel-title">Drop Auction Bidders here</div>
       <div class="ma-npc-list">
         {{#each npcSlots}}
-        <div class="ma-npc-row {{#unless occupied}}is-empty{{/unless}}" data-npc-index="{{index}}">
+        <div class="ma-npc-row {{#if img}}has-img{{/if}} {{#unless occupied}}is-empty{{/unless}}" data-npc-index="{{index}}">
           <span>{{number}}</span>
           {{#if occupied}}
+          {{#if img}}
+          <img class="ma-npc-thumb" src="{{img}}" alt="{{name}}">
+          {{/if}}
           <strong>{{name}}</strong>
           <button type="button" data-action="edit-npc" data-npc-index="{{index}}" title="Edit bidder"><i class="fas fa-pen"></i></button>
           <button type="button" data-action="remove-npc" data-npc-index="{{index}}" title="Remove bidder"><i class="fas fa-times"></i></button>

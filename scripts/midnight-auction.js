@@ -48,6 +48,7 @@ function defaultState() {
     },
     completedItemIds: [],
     bids: [],
+    latestResult: null,
     message: "The auction house is waiting for the next lot."
   };
 }
@@ -106,7 +107,8 @@ function getNpcBidders() {
   const normalized = Array.isArray(bidders) ? bidders.slice(0, 10) : [];
   return normalized.filter((bidder) => bidder?.name?.trim()).map((bidder, index) => ({
     id: bidder.id || randomId(),
-    name: bidder.name || `NPC Bidder ${index + 1}`
+    name: bidder.name || `NPC Bidder ${index + 1}`,
+    img: bidder.img || ""
   }));
 }
 
@@ -116,7 +118,8 @@ async function setNpcBidders(bidders, { ping = true } = {}) {
     .slice(0, 10)
     .map((bidder) => ({
       id: bidder.id || randomId(),
-      name: bidder.name.trim()
+      name: bidder.name.trim(),
+      img: bidder.img || ""
     }));
   await game.settings.set(MODULE_ID, NPC_BIDDERS_SETTING, normalized);
   renderAuctionApps();
@@ -205,6 +208,7 @@ function activeLot(catalog, state = getState()) {
 
 function lotSnapshot(item) {
   if (!item) return null;
+  const marketPrice = Number(item.marketPrice) || Number(item.startingPrice) || 0;
   return {
     id: item.id,
     itemUuid: item.itemUuid || "",
@@ -212,8 +216,8 @@ function lotSnapshot(item) {
     img: item.img || "icons/svg/item-bag.svg",
     sceneImg: item.sceneImg || "",
     description: item.description || "",
-    marketPrice: Number(item.marketPrice) || 0,
-    startingPrice: Number(item.startingPrice) || 0,
+    marketPrice,
+    startingPrice: effectiveStartingPrice(item),
     increment: Number(item.increment) || Number(game.settings.get(MODULE_ID, DEFAULT_INCREMENT_SETTING)) || 1
   };
 }
@@ -236,14 +240,14 @@ function nextBidFor(item, state) {
   if (!item) return 0;
   const current = Number(state.currentPrice) || 0;
   const increment = Number(item.increment) || Number(game.settings.get(MODULE_ID, DEFAULT_INCREMENT_SETTING)) || 1;
-  return state.bids?.length ? current + increment : Math.max(current, Number(item.startingPrice) || 0);
+  return state.bids?.length ? current + increment : Math.max(current, effectiveStartingPrice(item));
 }
 
 function nextNpcBidFor(item, state) {
   if (!item) return 0;
   const current = Number(state.currentPrice) || 0;
   const increment = Number(game.settings.get(MODULE_ID, NPC_BID_INCREMENT_SETTING)) || 1;
-  return state.bids?.length ? current + increment : Math.max(current, Number(item.startingPrice) || 0);
+  return state.bids?.length ? current + increment : Math.max(current, effectiveStartingPrice(item));
 }
 
 function timerMode() {
@@ -297,14 +301,25 @@ function bidderAvatar(name) {
 
 function bidSummaryRows(state, item) {
   const bids = bidRows(state);
-  return bids.map((bid, index) => {
-    const previous = bids[index + 1]?.amount ?? Number(item?.startingPrice) ?? 0;
+  const bidRowsWithSummaries = bids.map((bid, index) => {
+    const previous = bids[index + 1]?.amount ?? effectiveStartingPrice(item);
     const increase = previous > 0 ? Math.round(((bid.amount - previous) / previous) * 100) : 0;
     return {
       ...bid,
       summary: `${bid.bidderName} made a bid for ${bid.amount} gp${increase > 0 ? `, raising it by ${increase}%` : ""}.`
     };
   });
+
+  if (!state.latestResult) return bidRowsWithSummaries;
+  return [
+    {
+      ...state.latestResult,
+      summary: state.latestResult.winnerName
+        ? `${state.latestResult.winnerName} won ${state.latestResult.itemName} for ${state.latestResult.amount} gp.`
+        : `${state.latestResult.itemName} closed with no bids.`
+    },
+    ...bidRowsWithSummaries
+  ].slice(0, 8);
 }
 
 function formatTimerLabel(value) {
@@ -321,6 +336,7 @@ function npcBidderSlots(bidders) {
       number: index + 1,
       id: bidder?.id ?? "",
       name: bidder?.name ?? "",
+      img: bidder?.img ?? "",
       occupied: Boolean(bidder?.name?.trim())
     };
   });
@@ -339,6 +355,27 @@ function escapeHtml(value) {
 function startingBidForValue(value) {
   const percent = Math.max(0, Number(game.settings.get(MODULE_ID, STARTING_BID_PERCENT_SETTING)) || 0);
   return Math.floor((Number(value) || 0) * (percent / 100));
+}
+
+function effectiveStartingPrice(item) {
+  if (!item) return 0;
+  const marketPrice = Number(item.marketPrice) || Number(item.startingPrice) || 0;
+  return startingBidForValue(marketPrice);
+}
+
+function repriceCatalog(catalog) {
+  const nextCatalog = foundry.utils.deepClone(catalog);
+  for (const round of nextCatalog.rounds ?? []) {
+    round.items = (round.items ?? []).map((item) => {
+      const marketPrice = Number(item.marketPrice) || Number(item.startingPrice) || 0;
+      return {
+        ...item,
+        marketPrice,
+        startingPrice: startingBidForValue(marketPrice)
+      };
+    });
+  }
+  return nextCatalog;
 }
 
 function itemMarketPrice(item) {
@@ -384,9 +421,12 @@ async function postBidChat(bidderName, amount, itemName) {
 async function postWinnerChat(winningBid, item, { transferred = false } = {}) {
   if (!winningBid) return null;
   const transferText = transferred ? "<p>The lot has been transferred to the winner.</p>" : "";
+  const bidderImg = winningBid.bidderImg ? `<img src="${escapeHtml(winningBid.bidderImg)}" alt="${escapeHtml(winningBid.bidderName)}" width="48" height="48">` : "";
+  const itemImg = item.img ? `<img src="${escapeHtml(item.img)}" alt="${escapeHtml(item.name)}" width="48" height="48">` : "";
   const content = `
     <div class="midnight-auction-card">
       <h2>${escapeHtml(winningBid.bidderName)} wins!</h2>
+      <p>${bidderImg}${itemImg}</p>
       <p><strong>${escapeHtml(item.name)}</strong></p>
       <p>Winning bid: <strong>${winningBid.amount} gp</strong></p>
       ${transferText}
@@ -473,13 +513,17 @@ async function ensurePlayerMacroCompendium(playerMacro) {
 }
 
 function addFloatingButton() {
+  if (!game.user.isGM) {
+    document.getElementById("midnight-auction-float")?.remove();
+    return;
+  }
   if (document.getElementById("midnight-auction-float")) return;
 
   const button = document.createElement("button");
   button.id = "midnight-auction-float";
   button.type = "button";
   button.innerHTML = `<i class="fas fa-gavel"></i>`;
-  button.title = game.user.isGM ? "Open Midnight Auction builder" : "Open Midnight Auction";
+  button.title = "Open Midnight Auction builder";
   button.setAttribute("aria-label", "Open Midnight Auction");
 
   const position = game.settings.get(MODULE_ID, FLOAT_POSITION_SETTING) || {};
@@ -602,6 +646,7 @@ class MidnightAuctionApp extends Application {
       timeDisplay: timingActive ? formatTimerLabel(timeLeft) : "--",
       timerProgress: progress,
       timerTone: timerTone(progress),
+      showBidProgress: isBidding,
       urgent: timingActive && timeLeft <= 3,
       item,
       itemDescription: activeItem ? await TextEditor.enrichHTML(activeItem.description || "", { async: true }) : "<p>The velvet curtain has not lifted yet.</p>",
@@ -618,12 +663,14 @@ class MidnightAuctionApp extends Application {
         ? {
           name: highestBid.bidderName,
           amount: highestBid.amount,
+          img: highestBid.bidderImg || "",
           initial: highestBid.bidderName.slice(0, 1).toUpperCase(),
           avatarStyle: bidderAvatar(highestBid.bidderName)
         }
         : {
           name: "No bids",
           amount: 0,
+          img: "",
           initial: "-",
           avatarStyle: "linear-gradient(135deg, #9a9387, #cbc4b8)"
         },
@@ -733,8 +780,28 @@ class MidnightAuctionApp extends Application {
   }
 
   async _render(...args) {
+    const scrollPositions = this._captureScrollPositions();
     await super._render(...args);
+    this._restoreScrollPositions(scrollPositions);
     this._startClock();
+  }
+
+  _captureScrollPositions() {
+    const root = this.element?.[0];
+    if (!root) return {};
+    return {
+      description: root.querySelector(".ma-description")?.scrollTop ?? 0,
+      bids: root.querySelector(".ma-bids-card ol")?.scrollTop ?? 0
+    };
+  }
+
+  _restoreScrollPositions(scrollPositions) {
+    const root = this.element?.[0];
+    if (!root) return;
+    const description = root.querySelector(".ma-description");
+    const bids = root.querySelector(".ma-bids-card ol");
+    if (description) description.scrollTop = scrollPositions.description ?? 0;
+    if (bids) bids.scrollTop = scrollPositions.bids ?? 0;
   }
 
   close(options) {
@@ -1052,8 +1119,8 @@ class MidnightAuctionApp extends Application {
     notifyAll(`${item.name} is live at the Midnight Auction.`);
   }
 
-  async _startLot(round, item, { completedItemIds = getState().completedItemIds ?? [], message = null } = {}) {
-    const startingPrice = Number(item.startingPrice) || 0;
+  async _startLot(round, item, { completedItemIds = getState().completedItemIds ?? [], latestResult = getState().latestResult ?? null, message = null } = {}) {
+    const startingPrice = effectiveStartingPrice(item);
     const now = Date.now();
     const usePreview = previewEnabled();
     const lotMessage = message && !usePreview ? message : usePreview
@@ -1076,6 +1143,7 @@ class MidnightAuctionApp extends Application {
       },
       completedItemIds,
       bids: [],
+      latestResult,
       message: lotMessage
     });
   }
@@ -1090,7 +1158,7 @@ class MidnightAuctionApp extends Application {
       if (!item || state.status !== "preview") return;
 
       const now = Date.now();
-      const startingPrice = Number(item.startingPrice) || Number(state.currentPrice) || 0;
+      const startingPrice = effectiveStartingPrice(item) || Number(state.currentPrice) || 0;
       await setState({
         ...state,
         status: "item",
@@ -1124,6 +1192,15 @@ class MidnightAuctionApp extends Application {
       const message = winningBid
         ? `${winningBid.bidderName} wins ${item.name} for ${winningBid.amount} gp.`
         : `${item.name} received no bids.`;
+      const latestResult = {
+        itemName: item.name,
+        winnerName: winningBid?.bidderName || "",
+        bidderName: winningBid?.bidderName || "No bids",
+        bidderImg: winningBid?.bidderImg || "",
+        amount: winningBid?.amount || 0,
+        isResult: true,
+        time: Date.now()
+      };
       if (winningBid) {
         await postWinnerChat(winningBid, item, { transferred });
         playWinnerSound();
@@ -1133,6 +1210,7 @@ class MidnightAuctionApp extends Application {
       if (nextItem) {
         await this._startLot(round, nextItem, {
           completedItemIds,
+          latestResult,
           message: `${message} Next lot: ${nextItem.name}.`
         });
         notifyAll(`${nextItem.name} is now on the block.`);
@@ -1148,6 +1226,7 @@ class MidnightAuctionApp extends Application {
         endsAt: null,
         timerStartedAt: null,
         completedItemIds,
+        latestResult,
         message: `${message} ${round.title || `Round ${round.number}`} is complete.`
       });
       notifyAll(`${round.title || `Round ${round.number}`} is complete.`);
@@ -1206,6 +1285,7 @@ class MidnightAuctionApp extends Application {
     const focusId = nextCount >= 3 ? bidder.id : streak.bidderId;
     const bid = {
       bidderName: bidder.name,
+      bidderImg: bidder.img || "",
       npcBidderId: bidder.id,
       amount,
       time: now,
@@ -1321,6 +1401,7 @@ class MidnightAuctionApp extends Application {
     if ([DEFAULT_INCREMENT_SETTING, NPC_BID_INCREMENT_SETTING].includes(setting)) value = Math.max(1, value);
 
     await game.settings.set(MODULE_ID, setting, value);
+    if (setting === STARTING_BID_PERCENT_SETTING) await setCatalog(repriceCatalog(getCatalog()), { ping: false });
     if (setting === ROUND_COUNT_SETTING) this._selectedRoundId = null;
     renderAuctionApps();
     game.socket.emit(SOCKET, { type: "settings" });
@@ -1346,7 +1427,8 @@ class MidnightAuctionApp extends Application {
     if (index > bidders.length) index = bidders.length;
     bidders[index] = {
       id: bidders[index]?.id || randomId(),
-      name: actor.name
+      name: actor.name,
+      img: foundry.utils.getProperty(actor, "texture.src") || actor.img || actor.actor?.img || ""
     };
     await setNpcBidders(bidders);
   }
@@ -1369,8 +1451,10 @@ async function processBid(data) {
   }
 
   const now = Date.now();
+  const bidderName = bidderActor.name || bidder.name;
   const bid = {
-    bidderName: bidder.name,
+    bidderName,
+    bidderImg: bidderActor.img || "",
     userId: bidder.id,
     actorUuid: bidderActor.uuid,
     amount,
@@ -1385,11 +1469,11 @@ async function processBid(data) {
     winnerUserId: bidder.id,
     winnerActorUuid: bidderActor.uuid,
     bids: [bid, ...(state.bids ?? [])].slice(0, 20),
-    message: `${bidder.name} bids ${amount} gp. Going once...`
+    message: `${bidderName} bids ${amount} gp. Going once...`
   };
   await setState(nextState);
-  await postBidChat(bidder.name, amount, item.name);
-  notifyAll(`${bidder.name} bids ${amount} gp on ${item.name}.`);
+  await postBidChat(bidderName, amount, item.name);
+  notifyAll(`${bidderName} bids ${amount} gp on ${item.name}.`);
 }
 
 function currentAuctionImages() {

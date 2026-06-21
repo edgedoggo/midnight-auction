@@ -287,6 +287,7 @@
   font-weight: 800;
   line-height: 1;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+  object-fit: cover;
 }
 
 .ma-highest-card strong {
@@ -546,6 +547,18 @@
 .ma-npc-row.is-empty {
   grid-template-columns: 22px minmax(90px, 1fr);
   opacity: 0.62;
+}
+
+.ma-npc-row.has-img {
+  grid-template-columns: 22px 24px minmax(70px, 1fr) 24px 24px;
+}
+
+.ma-npc-thumb {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--ma-line);
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .ma-npc-row span {
