@@ -1,14 +1,11 @@
 .midnight-auction-window .window-content {
   padding: 0;
-  background: #171318;
-  color: #f5efe6;
 }
 
 .midnight-auction {
-  --ma-gold: #e8bf5a;
-  --ma-ink: #171318;
-  --ma-panel: #241d26;
-  --ma-line: rgba(255, 255, 255, 0.14);
+  --ma-line: rgba(0, 0, 0, 0.18);
+  --ma-soft: rgba(0, 0, 0, 0.04);
+  --ma-highlight: #7a4f13;
   display: grid;
   gap: 12px;
   padding: 12px;
@@ -16,41 +13,48 @@
 
 #midnight-auction-float {
   position: fixed;
-  left: 118px;
+  right: 18px;
   bottom: 18px;
   z-index: 100;
-  display: inline-flex;
-  gap: 8px;
+  display: grid;
+  place-items: center;
   align-items: center;
-  min-height: 38px;
-  padding: 0 13px;
-  border: 1px solid rgba(232, 191, 90, 0.62);
-  border-radius: 6px;
-  background: rgba(31, 22, 25, 0.94);
-  color: #fff3d3;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 50%;
+  background: url("../../../ui/parchment.jpg") repeat;
+  color: #2b2118;
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.36);
-  font-weight: 700;
+  cursor: grab;
+  font-size: 18px;
+  line-height: 1;
+  touch-action: none;
+}
+
+#midnight-auction-float:active {
+  cursor: grabbing;
 }
 
 #midnight-auction-float:hover {
-  border-color: #e8bf5a;
-  color: #ffffff;
-  text-shadow: 0 0 6px rgba(232, 191, 90, 0.8);
+  border-color: rgba(0, 0, 0, 0.62);
+  color: #000000;
 }
 
 .ma-stage {
   position: relative;
-  min-height: 230px;
+  min-height: 115px;
   overflow: hidden;
   border: 1px solid var(--ma-line);
   border-radius: 6px;
-  background: #08070a;
+  background: var(--ma-soft);
 }
 
 .ma-scene {
   width: 100%;
   height: 100%;
-  min-height: 230px;
+  min-height: 115px;
   object-fit: cover;
   display: block;
 }
@@ -62,7 +66,7 @@
   justify-content: space-between;
   align-items: flex-end;
   gap: 16px;
-  padding: 18px;
+  padding: 12px;
   background: linear-gradient(180deg, rgba(10, 8, 12, 0.1), rgba(10, 8, 12, 0.82));
 }
 
@@ -71,21 +75,26 @@
 .ma-log h3,
 .ma-round h3 {
   margin: 0;
-  color: #fff8e8;
 }
 
 .ma-stage p {
   margin: 4px 0 0;
-  color: #d8cfc2;
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.ma-stage h1 {
+  font-size: 24px;
+  line-height: 1.1;
+  color: #ffffff;
 }
 
 .ma-timer {
   min-width: 112px;
   text-align: center;
-  border: 1px solid rgba(232, 191, 90, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.45);
   border-radius: 6px;
   padding: 10px;
-  background: rgba(18, 14, 20, 0.78);
+  background: rgba(0, 0, 0, 0.48);
 }
 
 .ma-timer span,
@@ -96,13 +105,17 @@
   font-size: 11px;
   line-height: 1.2;
   text-transform: uppercase;
-  color: #b7aa9a;
+  color: rgba(0, 0, 0, 0.62);
+}
+
+.ma-stage .ma-timer span {
+  color: rgba(255, 255, 255, 0.78);
 }
 
 .ma-timer strong {
   display: block;
   margin-top: 2px;
-  color: var(--ma-gold);
+  color: #ffffff;
   font-size: 30px;
   line-height: 1;
 }
@@ -119,14 +132,14 @@
   padding: 12px;
   border: 1px solid var(--ma-line);
   border-radius: 6px;
-  background: var(--ma-panel);
+  background: var(--ma-soft);
 }
 
 .ma-item-image-wrap {
   min-height: 120px;
   border-radius: 4px;
   overflow: hidden;
-  background: #0d0b10;
+  background: var(--ma-soft);
 }
 
 .ma-item-image {
@@ -139,7 +152,6 @@
 .ma-description {
   max-height: 142px;
   overflow: auto;
-  color: #efe7da;
 }
 
 .ma-description p {
@@ -153,35 +165,101 @@
   justify-items: center;
   text-align: center;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--ma-line);
+  background: rgba(255, 255, 255, 0.25);
 }
 
 .ma-price strong,
 .ma-wallet strong {
-  color: var(--ma-gold);
+  color: var(--ma-highlight);
   font-size: 28px;
   line-height: 1.1;
 }
 
 .ma-price small {
-  color: #cfc3b4;
+  opacity: 0.72;
 }
 
 .ma-toolbar,
 .ma-player-controls {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   align-items: center;
 }
 
-.ma-toolbar button,
-.ma-lot-actions button,
-.ma-round header button,
-.ma-bid {
-  border: 1px solid rgba(232, 191, 90, 0.42);
+.ma-npc-panel {
+  border: 1px solid var(--ma-line);
+  border-radius: 6px;
+  background: var(--ma-soft);
+  padding: 8px 10px;
+}
+
+.ma-npc-panel summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.ma-npc-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ma-npc-row {
+  display: grid;
+  grid-template-columns: 34px minmax(105px, 1fr) minmax(110px, 1.15fr) 72px;
+  gap: 6px;
+  align-items: end;
+  padding: 6px;
+  border: 1px dashed var(--ma-line);
   border-radius: 5px;
-  background: #3a2b22;
-  color: #fff3d3;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.ma-npc-row img {
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  border-radius: 3px;
+}
+
+.ma-npc-row label {
+  font-size: 11px;
+}
+
+.ma-npc-row input {
+  width: 100%;
+  height: 26px;
+}
+
+.ma-round-tabs {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+  padding-bottom: 0;
+  overflow-x: auto;
+}
+
+.ma-round-tabs button {
+  flex: 0 0 auto;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  opacity: 0.82;
+}
+
+.ma-round-tabs button.is-selected {
+  opacity: 1;
+  font-weight: 700;
+  border-bottom-color: transparent;
+}
+
+.ma-round-tabs button.is-live::after {
+  content: " live";
+  font-size: 10px;
+  text-transform: uppercase;
+  opacity: 0.72;
 }
 
 .ma-toolbar button:disabled,
@@ -206,15 +284,15 @@
 .ma-log {
   border: 1px solid var(--ma-line);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--ma-soft);
 }
 
 .ma-round {
-  margin-top: 10px;
+  margin-top: 0;
 }
 
 .ma-round.is-active {
-  border-color: rgba(232, 191, 90, 0.54);
+  border-color: rgba(122, 79, 19, 0.62);
 }
 
 .ma-round header {
@@ -236,7 +314,6 @@
 
 .ma-round-title label,
 .ma-description-field {
-  color: #cdbfac;
   font-size: 11px;
 }
 
@@ -264,14 +341,14 @@
   gap: 10px;
   align-items: start;
   padding: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--ma-line);
   border-radius: 5px;
-  background: rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .ma-lot.is-active {
-  border-color: var(--ma-gold);
-  box-shadow: 0 0 0 1px rgba(232, 191, 90, 0.24);
+  border-color: var(--ma-highlight);
+  box-shadow: 0 0 0 1px rgba(122, 79, 19, 0.18);
 }
 
 .ma-lot img {
@@ -293,7 +370,6 @@
 }
 
 .ma-lot-fields label {
-  color: #cdbfac;
   font-size: 11px;
 }
 
@@ -339,13 +415,13 @@
   gap: 10px;
   padding: 6px 8px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .ma-empty,
 .ma-log p {
   margin: 8px 0 0;
-  color: #cfc3b4;
+  opacity: 0.72;
 }
 
 @media (max-width: 720px) {
@@ -387,8 +463,13 @@
     flex-direction: column;
   }
 
+  .ma-npc-list,
+  .ma-npc-row {
+    grid-template-columns: 1fr;
+  }
+
   #midnight-auction-float {
-    left: 12px;
+    right: 12px;
     bottom: 12px;
   }
 }

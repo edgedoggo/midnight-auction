@@ -3,9 +3,12 @@ const AUCTION_NAME = "Midnight Auction";
 const SOCKET = `module.${MODULE_ID}`;
 const STATE_SETTING = "state";
 const CATALOG_SETTING = "catalog";
-const TIMER_SETTING = "timerSeconds";
+const TIMER_SETTING = "timerMode";
 const DEFAULT_INCREMENT_SETTING = "defaultIncrement";
+const NPC_BID_INCREMENT_SETTING = "npcBidIncrement";
+const NPC_BIDDERS_SETTING = "npcBidders";
 const SCENE_IMAGES_SETTING = "sceneImages";
+const FLOAT_POSITION_SETTING = "floatingButtonPosition";
 
 function randomId() {
   return foundry.utils.randomID(16);
@@ -20,9 +23,34 @@ function defaultState() {
     endsAt: null,
     winnerUserId: null,
     winnerActorUuid: null,
+    npcBidStreak: {
+      itemId: null,
+      count: 0,
+      bidderId: null
+    },
     bids: [],
     message: "The auction house is waiting for the next lot."
   };
+}
+
+function defaultNpcBidders() {
+  return [
+    "Lady Vex Marrow",
+    "Master Orris Pike",
+    "The Brass Veil",
+    "Professor Nettlewick",
+    "Dame Sable",
+    "Brother Coin",
+    "The Red Ledger",
+    "Silas Moon",
+    "Madam Thrice",
+    "Old Crown"
+  ].map((name) => ({
+    id: randomId(),
+    name,
+    img: "icons/svg/mystery-man.svg",
+    maxBid: 0
+  }));
 }
 
 function defaultCatalog() {
@@ -55,6 +83,27 @@ function getCatalog() {
   const catalog = foundry.utils.deepClone(game.settings.get(MODULE_ID, CATALOG_SETTING) ?? {});
   if (!Array.isArray(catalog.rounds) || !catalog.rounds.length) return defaultCatalog();
   return catalog;
+}
+
+function getNpcBidders() {
+  const bidders = foundry.utils.deepClone(game.settings.get(MODULE_ID, NPC_BIDDERS_SETTING) ?? []);
+  const normalized = Array.isArray(bidders) ? bidders.slice(0, 10) : [];
+  while (normalized.length < 10) {
+    const defaults = defaultNpcBidders();
+    normalized.push(defaults[normalized.length]);
+  }
+  return normalized.map((bidder, index) => ({
+    id: bidder.id || randomId(),
+    name: bidder.name || `NPC Bidder ${index + 1}`,
+    img: bidder.img || "icons/svg/mystery-man.svg",
+    maxBid: Math.max(0, Number(bidder.maxBid) || 0)
+  }));
+}
+
+async function setNpcBidders(bidders, { ping = true } = {}) {
+  await game.settings.set(MODULE_ID, NPC_BIDDERS_SETTING, bidders.slice(0, 10));
+  renderAuctionApps();
+  if (ping) game.socket.emit(SOCKET, { type: "npc-bidders" });
 }
 
 async function setCatalog(catalog, { ping = true } = {}) {
@@ -118,6 +167,27 @@ function nextBidFor(item, state) {
   return state.bids?.length ? current + increment : Math.max(current, Number(item.startingPrice) || 0);
 }
 
+function nextNpcBidFor(item, state) {
+  if (!item) return 0;
+  const current = Number(state.currentPrice) || 0;
+  const increment = Number(game.settings.get(MODULE_ID, NPC_BID_INCREMENT_SETTING)) || 1;
+  return state.bids?.length ? current + increment : Math.max(current, Number(item.startingPrice) || 0);
+}
+
+function timerMode() {
+  return String(game.settings.get(MODULE_ID, TIMER_SETTING) || "10");
+}
+
+function timerSeconds() {
+  const mode = timerMode();
+  if (mode === "sudden") return 10;
+  return Number(mode) || 10;
+}
+
+function bidResetsTimer() {
+  return timerMode() !== "sudden";
+}
+
 function bidRows(state) {
   return (state.bids ?? []).slice(0, 8);
 }
@@ -178,9 +248,62 @@ function addFloatingButton() {
   const button = document.createElement("button");
   button.id = "midnight-auction-float";
   button.type = "button";
-  button.innerHTML = `<i class="fas fa-gavel"></i><span>Midnight Auction</span>`;
+  button.innerHTML = `<i class="fas fa-gavel"></i>`;
   button.title = game.user.isGM ? "Open Midnight Auction builder" : "Open Midnight Auction";
-  button.addEventListener("click", () => openAuction());
+  button.setAttribute("aria-label", "Open Midnight Auction");
+
+  const position = game.settings.get(MODULE_ID, FLOAT_POSITION_SETTING) || {};
+  if (Number.isFinite(position.left) && Number.isFinite(position.top)) {
+    button.style.left = `${position.left}px`;
+    button.style.top = `${position.top}px`;
+    button.style.right = "auto";
+    button.style.bottom = "auto";
+  }
+
+  let drag = null;
+  button.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) return;
+    const rect = button.getBoundingClientRect();
+    drag = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      left: rect.left,
+      top: rect.top,
+      moved: false
+    };
+    button.setPointerCapture(event.pointerId);
+  });
+
+  button.addEventListener("pointermove", (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+
+    const left = Math.min(window.innerWidth - button.offsetWidth - 8, Math.max(8, drag.left + dx));
+    const top = Math.min(window.innerHeight - button.offsetHeight - 8, Math.max(8, drag.top + dy));
+    button.style.left = `${left}px`;
+    button.style.top = `${top}px`;
+    button.style.right = "auto";
+    button.style.bottom = "auto";
+  });
+
+  button.addEventListener("pointerup", async (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const wasDrag = drag.moved;
+    drag = null;
+    button.releasePointerCapture(event.pointerId);
+
+    const rect = button.getBoundingClientRect();
+    await game.settings.set(MODULE_ID, FLOAT_POSITION_SETTING, {
+      left: Math.round(rect.left),
+      top: Math.round(rect.top)
+    });
+
+    if (!wasDrag) openAuction();
+  });
+
   document.body.appendChild(button);
 }
 
@@ -201,6 +324,7 @@ class MidnightAuctionApp extends Application {
     super(options);
     this._clock = null;
     this._ending = false;
+    this._selectedRoundId = null;
   }
 
   async getData() {
@@ -219,6 +343,8 @@ class MidnightAuctionApp extends Application {
     const goldActor = actorForUser(game.user);
     const gold = goldActor ? getCurrencyGp(goldActor) : 0;
     const nextBid = nextBidFor(activeItem, state);
+    const selectedRound = this._selectedRound(catalog, state);
+    const npcBidders = getNpcBidders();
 
     return {
       isGM: game.user.isGM,
@@ -232,26 +358,55 @@ class MidnightAuctionApp extends Application {
       itemDescription: activeItem ? await TextEditor.enrichHTML(activeItem.description || "", { async: true }) : "<p>The velvet curtain has not lifted yet.</p>",
       currentPrice: Number(state.currentPrice) || 0,
       nextBid,
+      nextNpcBid: nextNpcBidFor(activeItem, state),
       gold,
       canBid: Boolean(activeItem && state.status === "item" && goldActor && gold >= nextBid),
+      canNpcBid: Boolean(activeItem && state.status === "item" && npcBidders.some((bidder) => bidder.name?.trim())),
       bids: bidRows(state),
+      npcBidders,
       rounds: catalog.rounds.map((catalogRound) => ({
         ...catalogRound,
         active: state.roundId === catalogRound.id,
+        selected: selectedRound?.id === catalogRound.id,
         items: catalogRound.items.map((lot) => ({
           ...lot,
           active: state.itemId === lot.id,
           increment: Number(lot.increment) || Number(game.settings.get(MODULE_ID, DEFAULT_INCREMENT_SETTING)) || 1
         }))
       })),
+      selectedRound: selectedRound
+        ? {
+          ...selectedRound,
+          active: state.roundId === selectedRound.id,
+          items: selectedRound.items.map((lot) => ({
+            ...lot,
+            active: state.itemId === lot.id,
+            increment: Number(lot.increment) || Number(game.settings.get(MODULE_ID, DEFAULT_INCREMENT_SETTING)) || 1
+          }))
+        }
+        : null,
       activeRoundTitle: round?.title || ""
     };
+  }
+
+  _selectedRound(catalog, state) {
+    const selected = catalog.rounds.find((round) => round.id === this._selectedRoundId);
+    if (selected) return selected;
+    const stateRound = catalog.rounds.find((round) => round.id === state.roundId);
+    if (stateRound) {
+      this._selectedRoundId = stateRound.id;
+      return stateRound;
+    }
+    const first = catalog.rounds[0] ?? null;
+    this._selectedRoundId = first?.id ?? null;
+    return first;
   }
 
   activateListeners(html) {
     super.activateListeners(html);
     html.find("[data-action='refresh']").on("click", () => this.render(false));
     html.find("[data-action='stop-auction']").on("click", () => this._onStopAuction());
+    html.find("[data-action='select-round']").on("click", (event) => this._onSelectRound(event));
     html.find("[data-action='add-round']").on("click", () => this._onAddRound());
     html.find("[data-action='delete-round']").on("click", (event) => this._onDeleteRound(event));
     html.find("[data-action='add-item']").on("click", (event) => this._onAddItem(event));
@@ -260,8 +415,12 @@ class MidnightAuctionApp extends Application {
     html.find("[data-action='end-round']").on("click", (event) => this._onEndRound(event));
     html.find("[data-action='start-item']").on("click", (event) => this._onStartItem(event));
     html.find("[data-action='end-item']").on("click", (event) => this._onEndItem(event));
+    html.find("[data-action='npc-bid']").on("click", () => this._onNpcBid());
     html.find("[data-action='bid']").on("click", () => this._onBid());
     html.find("[data-field]").on("change", (event) => this._onFieldChange(event));
+    html.find("[data-npc-field]").on("change", (event) => this._onNpcFieldChange(event));
+    html.find("[data-npc-index]").on("dragover", (event) => event.preventDefault());
+    html.find("[data-npc-index]").on("drop", (event) => this._onNpcDrop(event));
   }
 
   async _render(...args) {
@@ -293,16 +452,24 @@ class MidnightAuctionApp extends Application {
     notifyAll("The Midnight Auction has ended.");
   }
 
+  _onSelectRound(event) {
+    if (!game.user.isGM) return;
+    this._selectedRoundId = event.currentTarget.dataset.roundId;
+    this.render(false);
+  }
+
   async _onAddRound() {
     if (!game.user.isGM) return;
     const catalog = getCatalog();
     const nextNumber = Math.max(0, ...catalog.rounds.map((round) => Number(round.number) || 0)) + 1;
-    catalog.rounds.push({
+    const round = {
       id: randomId(),
       number: nextNumber,
       title: `Round ${nextNumber}`,
       items: []
-    });
+    };
+    catalog.rounds.push(round);
+    this._selectedRoundId = round.id;
     await setCatalog(catalog);
   }
 
@@ -312,6 +479,7 @@ class MidnightAuctionApp extends Application {
     const catalog = getCatalog();
     catalog.rounds = catalog.rounds.filter((round) => round.id !== roundId);
     if (!catalog.rounds.length) catalog.rounds = defaultCatalog().rounds;
+    if (this._selectedRoundId === roundId) this._selectedRoundId = catalog.rounds[0]?.id ?? null;
 
     const state = getState();
     if (state.roundId === roundId) await setState(defaultState(), { ping: false });
@@ -397,15 +565,19 @@ class MidnightAuctionApp extends Application {
     if (!round || !item) return;
 
     const startingPrice = Number(item.startingPrice) || 0;
-    const timerSeconds = Number(game.settings.get(MODULE_ID, TIMER_SETTING)) || 10;
     await setState({
       status: "item",
       roundId: round.id,
       itemId: item.id,
       currentPrice: startingPrice,
-      endsAt: Date.now() + timerSeconds * 1000,
+      endsAt: Date.now() + timerSeconds() * 1000,
       winnerUserId: null,
       winnerActorUuid: null,
+      npcBidStreak: {
+        itemId: item.id,
+        count: 0,
+        bidderId: null
+      },
       bids: [],
       message: `${item.name} is on the block. Opening bid: ${startingPrice} gp.`
     });
@@ -441,10 +613,61 @@ class MidnightAuctionApp extends Application {
   }
 
   async _settleWinningBid(winningBid) {
+    if (!winningBid.actorUuid) return;
     const winnerActor = await fromUuid(winningBid.actorUuid);
     if (!winnerActor) return;
     const gold = getCurrencyGp(winnerActor);
     await setCurrencyGp(winnerActor, gold - winningBid.amount);
+  }
+
+  async _onNpcBid() {
+    if (!game.user.isGM) return;
+    const catalog = getCatalog();
+    const state = getState();
+    const { item } = activeLot(catalog, state);
+    if (!item || state.status !== "item") return ui.notifications.warn("Start a lot before placing an NPC bid.");
+
+    const bidders = getNpcBidders().filter((bidder) => bidder.name?.trim());
+    if (!bidders.length) return ui.notifications.warn("Add at least one NPC bidder first.");
+
+    const streak = state.npcBidStreak?.itemId === state.itemId
+      ? foundry.utils.deepClone(state.npcBidStreak)
+      : { itemId: state.itemId, count: 0, bidderId: null };
+    const amount = nextNpcBidFor(item, state);
+    const focused = bidders.find((bidder) => bidder.id === streak.bidderId);
+    const guaranteed = bidders.filter((bidder) => Number(bidder.maxBid) >= amount);
+    const focusedGuaranteed = focused && Number(focused.maxBid) >= amount ? focused : null;
+    const bidder = focusedGuaranteed
+      || (guaranteed.length ? guaranteed[Math.floor(Math.random() * guaranteed.length)] : null)
+      || (streak.count >= 2 && focused ? focused : bidders[Math.floor(Math.random() * bidders.length)]);
+    const nextCount = streak.count + 1;
+    const focusId = Number(bidder.maxBid) >= amount || nextCount >= 3 ? bidder.id : streak.bidderId;
+    const bid = {
+      bidderName: bidder.name,
+      npcBidderId: bidder.id,
+      amount,
+      time: Date.now(),
+      isNpc: true
+    };
+
+    const nextState = {
+      ...state,
+      currentPrice: amount,
+      endsAt: bidResetsTimer() ? Date.now() + timerSeconds() * 1000 : state.endsAt,
+      winnerUserId: null,
+      winnerActorUuid: null,
+      npcBidStreak: {
+        itemId: state.itemId,
+        count: nextCount,
+        bidderId: focusId
+      },
+      bids: [bid, ...(state.bids ?? [])].slice(0, 20),
+      message: `${bidder.name} raises the room to ${amount} gp.`
+    };
+
+    await setState(nextState);
+    await postBidChat(bidder.name, amount, item.name);
+    notifyAll(`${bidder.name} bids ${amount} gp on ${item.name}.`);
   }
 
   async _onBid() {
@@ -481,6 +704,42 @@ class MidnightAuctionApp extends Application {
     catalog.rounds.sort((a, b) => (Number(a.number) || 0) - (Number(b.number) || 0));
     await setCatalog(catalog);
   }
+
+  async _onNpcFieldChange(event) {
+    if (!game.user.isGM) return;
+    const index = Number(event.currentTarget.dataset.npcIndex);
+    const field = event.currentTarget.dataset.npcField;
+    const bidders = getNpcBidders();
+    if (!bidders[index]) return;
+    if (field === "maxBid") bidders[index][field] = Math.max(0, Number(event.currentTarget.value) || 0);
+    else bidders[index][field] = event.currentTarget.value;
+    await setNpcBidders(bidders);
+  }
+
+  async _onNpcDrop(event) {
+    if (!game.user.isGM) return;
+    event.preventDefault();
+    const index = Number(event.currentTarget.dataset.npcIndex);
+    const bidders = getNpcBidders();
+    if (!bidders[index]) return;
+
+    let data = null;
+    try {
+      data = JSON.parse(event.originalEvent?.dataTransfer?.getData("text/plain") || event.dataTransfer?.getData("text/plain") || "{}");
+    } catch (_err) {
+      return;
+    }
+
+    const actor = data.uuid ? await fromUuid(data.uuid) : null;
+    if (!actor) return;
+    bidders[index] = {
+      id: bidders[index].id || randomId(),
+      name: actor.name,
+      img: actor.img || "icons/svg/mystery-man.svg",
+      maxBid: bidders[index].maxBid || 0
+    };
+    await setNpcBidders(bidders);
+  }
 }
 
 async function processBid(data) {
@@ -498,7 +757,6 @@ async function processBid(data) {
     return;
   }
 
-  const timerSeconds = Number(game.settings.get(MODULE_ID, TIMER_SETTING)) || 10;
   const bid = {
     bidderName: bidder.name,
     userId: bidder.id,
@@ -510,7 +768,7 @@ async function processBid(data) {
   const nextState = {
     ...state,
     currentPrice: amount,
-    endsAt: Date.now() + timerSeconds * 1000,
+    endsAt: bidResetsTimer() ? Date.now() + timerSeconds() * 1000 : state.endsAt,
     winnerUserId: bidder.id,
     winnerActorUuid: bidderActor.uuid,
     bids: [bid, ...(state.bids ?? [])].slice(0, 20),
@@ -543,12 +801,19 @@ Hooks.once("init", () => {
   });
 
   game.settings.register(MODULE_ID, TIMER_SETTING, {
-    name: "Bid Timer Seconds",
-    hint: "The countdown length. Each accepted bid resets the timer to this value.",
+    name: "Bid Timer Mode",
+    hint: "How long each accepted bid resets the timer. Sudden Death starts each lot at 10 seconds and bids do not reset it.",
     scope: "world",
     config: true,
-    type: Number,
-    default: 10
+    type: String,
+    choices: {
+      "5": "5 seconds",
+      "10": "10 seconds",
+      "15": "15 seconds",
+      "30": "30 seconds",
+      sudden: "Sudden Death: 10 seconds, no resets"
+    },
+    default: "10"
   });
 
   game.settings.register(MODULE_ID, DEFAULT_INCREMENT_SETTING, {
@@ -560,6 +825,22 @@ Hooks.once("init", () => {
     default: 10
   });
 
+  game.settings.register(MODULE_ID, NPC_BID_INCREMENT_SETTING, {
+    name: "NPC Bid Increment",
+    hint: "How much an NPC bid raises the current price when the GM presses NPC Bid.",
+    scope: "world",
+    config: true,
+    type: Number,
+    default: 10
+  });
+
+  game.settings.register(MODULE_ID, NPC_BIDDERS_SETTING, {
+    scope: "world",
+    config: false,
+    type: Object,
+    default: defaultNpcBidders()
+  });
+
   game.settings.register(MODULE_ID, SCENE_IMAGES_SETTING, {
     name: "Scene Images",
     hint: "Optional image paths, one per line: idle, round live, item live, sold.",
@@ -568,12 +849,19 @@ Hooks.once("init", () => {
     type: String,
     default: ""
   });
+
+  game.settings.register(MODULE_ID, FLOAT_POSITION_SETTING, {
+    scope: "client",
+    config: false,
+    type: Object,
+    default: {}
+  });
 });
 
 Hooks.once("ready", async () => {
   game.socket.on(SOCKET, async (data) => {
     if (data.type === "bid") return processBid(data);
-    if (data.type === "state" || data.type === "catalog") return renderAuctionApps();
+    if (["state", "catalog", "npc-bidders"].includes(data.type)) return renderAuctionApps();
     if (data.type === "notify") {
       if (!data.userId || data.userId === game.user.id) ui.notifications.info(data.message);
       return renderAuctionApps();

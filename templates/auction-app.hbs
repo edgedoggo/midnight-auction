@@ -33,27 +33,50 @@
   <section class="ma-gm-controls">
     <div class="ma-toolbar">
       <button type="button" data-action="add-round"><i class="fas fa-plus"></i> Add Round</button>
+      <button type="button" data-action="npc-bid" {{#unless canNpcBid}}disabled{{/unless}}><i class="fas fa-user-secret"></i> NPC Bid {{nextNpcBid}} gp</button>
       <button type="button" data-action="refresh"><i class="fas fa-sync"></i> Refresh</button>
       <button type="button" data-action="stop-auction"><i class="fas fa-stop"></i> End Auction</button>
     </div>
 
-    {{#each rounds}}
-    <article class="ma-round {{#if active}}is-active{{/if}}">
+    <details class="ma-npc-panel">
+      <summary>NPC Bidders</summary>
+      <div class="ma-npc-list">
+        {{#each npcBidders}}
+        <div class="ma-npc-row" data-npc-index="{{@index}}">
+          <img src="{{img}}" alt="{{name}}">
+          <label>Name <input type="text" value="{{name}}" data-npc-field="name" data-npc-index="{{@index}}"></label>
+          <label>Image <input type="text" value="{{img}}" data-npc-field="img" data-npc-index="{{@index}}"></label>
+          <label>Auto to <input type="number" min="0" value="{{maxBid}}" data-npc-field="maxBid" data-npc-index="{{@index}}"></label>
+        </div>
+        {{/each}}
+      </div>
+    </details>
+
+    <nav class="ma-round-tabs" aria-label="Auction rounds">
+      {{#each rounds}}
+      <button type="button" class="{{#if selected}}is-selected{{/if}} {{#if active}}is-live{{/if}}" data-action="select-round" data-round-id="{{id}}">
+        {{title}}
+      </button>
+      {{/each}}
+    </nav>
+
+    {{#if selectedRound}}
+    <article class="ma-round {{#if selectedRound.active}}is-active{{/if}}">
       <header>
         <div class="ma-round-title">
-          <label>No. <input type="number" min="1" value="{{number}}" data-field="number" data-round-id="{{id}}"></label>
-          <label>Round <input type="text" value="{{title}}" data-field="title" data-round-id="{{id}}"></label>
+          <label>No. <input type="number" min="1" value="{{selectedRound.number}}" data-field="number" data-round-id="{{selectedRound.id}}"></label>
+          <label>Round <input type="text" value="{{selectedRound.title}}" data-field="title" data-round-id="{{selectedRound.id}}"></label>
         </div>
         <div class="ma-round-actions">
-          <button type="button" data-action="start-round" data-round-id="{{id}}">Start Round</button>
-          <button type="button" data-action="end-round" data-round-id="{{id}}">End Round</button>
-          <button type="button" data-action="add-item" data-round-id="{{id}}">Add Lot</button>
-          <button type="button" data-action="delete-round" data-round-id="{{id}}">Delete</button>
+          <button type="button" data-action="start-round" data-round-id="{{selectedRound.id}}">Start Round</button>
+          <button type="button" data-action="end-round" data-round-id="{{selectedRound.id}}">End Round</button>
+          <button type="button" data-action="add-item" data-round-id="{{selectedRound.id}}">Add Lot</button>
+          <button type="button" data-action="delete-round" data-round-id="{{selectedRound.id}}">Delete</button>
         </div>
       </header>
 
       <div class="ma-lots">
-        {{#each items}}
+        {{#each selectedRound.items}}
         <div class="ma-lot {{#if active}}is-active{{/if}}">
           <img src="{{img}}" alt="{{name}}">
           <div class="ma-lot-main">
@@ -79,7 +102,7 @@
         {{/each}}
       </div>
     </article>
-    {{/each}}
+    {{/if}}
   </section>
   {{else}}
   <section class="ma-player-controls">
