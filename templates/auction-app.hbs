@@ -49,7 +49,7 @@
       <strong>{{gold}} gp</strong>
     </div>
     <button class="ma-bid" type="button" data-action="bid" {{#unless canBid}}disabled{{/unless}}>
-      <span class="ma-bid-progress" style="width: {{timerProgress}}%"></span>
+      <span class="ma-bid-progress is-{{timerTone}}" style="width: {{timerProgress}}%"></span>
       <strong>{{bidLabel}}</strong>
     </button>
     <div class="ma-timer {{#if urgent}}is-urgent{{/if}}">
@@ -67,6 +67,28 @@
       <button type="button" data-action="stop-auction"><i class="fas fa-stop"></i> End Auction</button>
     </div>
 
+    <section class="ma-auction-profiles">
+      <div class="ma-profile-head">
+        <strong>{{activeAuctionName}}</strong>
+        <div>
+          <button type="button" data-action="new-auction"><i class="fas fa-file"></i> New</button>
+          <button type="button" data-action="save-auction" {{#unless canSaveAuction}}disabled{{/unless}}><i class="fas fa-save"></i> Save Auction</button>
+          <button type="button" data-action="backup-auction"><i class="fas fa-archive"></i> Backup</button>
+        </div>
+      </div>
+      <div class="ma-profile-list">
+        {{#each auctionProfiles}}
+        <div class="ma-profile-row {{#if active}}is-active{{/if}}">
+          <span>{{name}}</span>
+          <button type="button" data-action="load-auction" data-profile-id="{{id}}">Load</button>
+          <button type="button" data-action="delete-auction" data-profile-id="{{id}}" title="Delete saved auction"><i class="fas fa-times"></i></button>
+        </div>
+        {{else}}
+        <p class="ma-empty">No saved auctions yet.</p>
+        {{/each}}
+      </div>
+    </section>
+
     {{#if showSettings}}
     <section class="ma-settings-panel">
       <label>Bid Timer
@@ -81,6 +103,18 @@
       </label>
       <label class="ma-setting-check">Preview
         <input type="checkbox" {{checked settings.previewEnabled}} data-setting="previewEnabled">
+      </label>
+      <label class="ma-setting-check">Transfer
+        <input type="checkbox" {{checked settings.transferItemToWinner}} data-setting="transferItemToWinner">
+      </label>
+      <label class="ma-setting-check">Invite
+        <input type="checkbox" {{checked settings.autoOpenPlayers}} data-setting="autoOpenPlayers">
+      </label>
+      <label class="ma-setting-check">Win Sound
+        <input type="checkbox" {{checked settings.winnerSoundEnabled}} data-setting="winnerSoundEnabled">
+      </label>
+      <label class="ma-setting-check">Start Sound
+        <input type="checkbox" {{checked settings.auctionStartSoundEnabled}} data-setting="auctionStartSoundEnabled">
       </label>
       <label>Read Time
         <input type="number" min="1" value="{{settings.previewSeconds}}" data-setting="previewSeconds">
@@ -99,6 +133,12 @@
       </label>
       <label class="ma-setting-wide">Auction Photo
         <input type="text" value="{{settings.auctionPhoto}}" data-setting="auctionPhoto" placeholder="icons/environment/settlement/market-stall.webp">
+      </label>
+      <label class="ma-setting-wide">Winner Sound
+        <input type="text" value="{{settings.winnerSound}}" data-setting="winnerSound" placeholder="sounds/interface/level-up.wav">
+      </label>
+      <label class="ma-setting-wide">Start Sound
+        <input type="text" value="{{settings.auctionStartSound}}" data-setting="auctionStartSound" placeholder="sounds/interface/notify.wav">
       </label>
     </section>
     {{/if}}

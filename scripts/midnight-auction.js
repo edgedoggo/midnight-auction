@@ -14,6 +14,14 @@ const SCENE_IMAGES_SETTING = "sceneImages";
 const AUCTION_PHOTO_SETTING = "auctionPhoto";
 const PREVIEW_ENABLED_SETTING = "previewEnabled";
 const PREVIEW_SECONDS_SETTING = "previewSeconds";
+const TRANSFER_ITEM_SETTING = "transferItemToWinner";
+const WINNER_SOUND_ENABLED_SETTING = "winnerSoundEnabled";
+const WINNER_SOUND_SETTING = "winnerSound";
+const AUCTION_START_SOUND_ENABLED_SETTING = "auctionStartSoundEnabled";
+const AUCTION_START_SOUND_SETTING = "auctionStartSound";
+const AUTO_OPEN_PLAYERS_SETTING = "autoOpenPlayers";
+const AUCTION_PROFILES_SETTING = "auctionProfiles";
+const ACTIVE_AUCTION_SETTING = "activeAuctionId";
 const FLOAT_POSITION_SETTING = "floatingButtonPosition";
 
 function randomId() {
@@ -119,6 +127,30 @@ async function setCatalog(catalog, { ping = true } = {}) {
   if (ping) game.socket.emit(SOCKET, { type: "catalog" });
 }
 
+function getAuctionProfiles() {
+  const profiles = foundry.utils.deepClone(game.settings.get(MODULE_ID, AUCTION_PROFILES_SETTING) ?? []);
+  return (Array.isArray(profiles) ? profiles : []).slice(0, 3).map((profile, index) => ({
+    id: profile.id || randomId(),
+    name: profile.name || `Auction ${index + 1}`,
+    catalog: normalizeCatalog(profile.catalog ?? {})
+  }));
+}
+
+async function setAuctionProfiles(profiles, { ping = true } = {}) {
+  await game.settings.set(MODULE_ID, AUCTION_PROFILES_SETTING, profiles.slice(0, 3));
+  renderAuctionApps();
+  if (ping) game.socket.emit(SOCKET, { type: "profiles" });
+}
+
+function activeAuctionId() {
+  return game.settings.get(MODULE_ID, ACTIVE_AUCTION_SETTING) || "";
+}
+
+function activeAuctionName() {
+  const id = activeAuctionId();
+  return getAuctionProfiles().find((profile) => profile.id === id)?.name || "Unsaved Auction";
+}
+
 async function setState(nextState, { ping = true } = {}) {
   const state = foundry.utils.mergeObject(defaultState(), nextState ?? {}, { inplace: false });
   await game.settings.set(MODULE_ID, STATE_SETTING, state);
@@ -173,6 +205,7 @@ function lotSnapshot(item) {
   if (!item) return null;
   return {
     id: item.id,
+    itemUuid: item.itemUuid || "",
     name: item.name,
     img: item.img || "icons/svg/item-bag.svg",
     sceneImg: item.sceneImg || "",
@@ -240,8 +273,14 @@ function bidRows(state) {
 function timerProgress(state, timeLeft) {
   if (!["preview", "item"].includes(state.status) || !state.endsAt || !state.timerStartedAt) return 0;
   const total = Math.max(1, state.endsAt - state.timerStartedAt);
-  const elapsed = Math.max(0, Date.now() - state.timerStartedAt);
-  return Math.max(0, Math.min(100, Math.round((elapsed / total) * 100)));
+  const remaining = Math.max(0, state.endsAt - Date.now());
+  return Math.max(0, Math.min(100, Math.round((remaining / total) * 100)));
+}
+
+function timerTone(progress) {
+  if (progress > 50) return "green";
+  if (progress > 20) return "yellow";
+  return "red";
 }
 
 function bidderAvatar(name) {
@@ -315,6 +354,18 @@ function notifyAll(message) {
   game.socket.emit(SOCKET, { type: "notify", message });
 }
 
+function invitePlayersToAuction(message) {
+  playAuctionStartSound();
+  if (!game.settings.get(MODULE_ID, AUTO_OPEN_PLAYERS_SETTING)) return;
+  game.socket.emit(SOCKET, { type: "open-auction", message });
+}
+
+async function handleAuctionInvite(message) {
+  if (game.user.isGM) return;
+  ui.notifications.info(message || "The auction is starting.");
+  return openAuction();
+}
+
 async function postBidChat(bidderName, amount, itemName) {
   const content = `<p><strong>${bidderName}</strong> bids <strong>${amount} gp</strong> on <em>${itemName}</em>.</p>`;
   return ChatMessage.create({
@@ -323,8 +374,44 @@ async function postBidChat(bidderName, amount, itemName) {
   });
 }
 
+async function postWinnerChat(winningBid, item, { transferred = false } = {}) {
+  if (!winningBid) return null;
+  const transferText = transferred ? "<p>The lot has been transferred to the winner.</p>" : "";
+  const content = `
+    <div class="midnight-auction-card">
+      <h2>${escapeHtml(winningBid.bidderName)} wins!</h2>
+      <p><strong>${escapeHtml(item.name)}</strong></p>
+      <p>Winning bid: <strong>${winningBid.amount} gp</strong></p>
+      ${transferText}
+    </div>
+  `;
+  return ChatMessage.create({
+    speaker: ChatMessage.getSpeaker({ alias: AUCTION_NAME }),
+    content
+  });
+}
+
+function playWinnerSound() {
+  if (!game.settings.get(MODULE_ID, WINNER_SOUND_ENABLED_SETTING)) return;
+  const src = game.settings.get(MODULE_ID, WINNER_SOUND_SETTING);
+  if (!src) return;
+  AudioHelper.play({ src, volume: 0.8, autoplay: true, loop: false }, true);
+}
+
+function playAuctionStartSound() {
+  if (!game.settings.get(MODULE_ID, AUCTION_START_SOUND_ENABLED_SETTING)) return;
+  const src = game.settings.get(MODULE_ID, AUCTION_START_SOUND_SETTING);
+  if (!src) return;
+  AudioHelper.play({ src, volume: 0.8, autoplay: true, loop: false }, true);
+}
+
 async function ensureMacros() {
   if (!game.user.isGM) return;
+  const playerMacro = {
+    name: "Player Midnight Auction",
+    img: "icons/tools/scribal/scroll-blue.webp",
+    command: `game.modules.get("${MODULE_ID}").api.open();`
+  };
   const macroData = [
     {
       name: "Midnight Auction",
@@ -335,7 +422,8 @@ async function ensureMacros() {
       name: "Open Midnight Auction",
       img: "icons/commodities/currency/coins-plain-stack-gold.webp",
       command: `game.modules.get("${MODULE_ID}").api.open();`
-    }
+    },
+    playerMacro
   ];
 
   for (const data of macroData) {
@@ -346,6 +434,32 @@ async function ensureMacros() {
       type: "script",
       ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER }
     });
+  }
+
+  await ensurePlayerMacroCompendium(playerMacro);
+}
+
+async function ensurePlayerMacroCompendium(playerMacro) {
+  try {
+    let pack = game.packs.get("world.midnight-auction-player-macros");
+    if (!pack && globalThis.CompendiumCollection?.createCompendium) {
+      pack = await globalThis.CompendiumCollection.createCompendium({
+        type: "Macro",
+        label: "Midnight Auction Player Macros",
+        name: "midnight-auction-player-macros",
+        package: "world"
+      });
+    }
+    if (!pack) return;
+    const index = await pack.getIndex();
+    if (index.some((entry) => entry.name === playerMacro.name)) return;
+    await Macro.create({
+      ...playerMacro,
+      type: "script",
+      ownership: { default: CONST.DOCUMENT_OWNERSHIP_LEVELS.OWNER }
+    }, { pack: pack.collection });
+  } catch (err) {
+    console.warn(`${AUCTION_NAME} could not create the player macro compendium.`, err);
   }
 }
 
@@ -464,6 +578,9 @@ class MidnightAuctionApp extends Application {
     const timingActive = ["preview", "item"].includes(state.status);
     const isBidding = state.status === "item";
     const isPreview = state.status === "preview";
+    const progress = timerProgress(state, timeLeft);
+    const profiles = getAuctionProfiles();
+    const currentAuctionId = activeAuctionId();
 
     return {
       isGM: game.user.isGM,
@@ -473,7 +590,8 @@ class MidnightAuctionApp extends Application {
       timerLabel: isPreview ? "Reading Time" : isBidding ? "Seconds Left" : "Timer",
       timeLeft: timingActive ? timeLeft : "--",
       timeDisplay: timingActive ? formatTimerLabel(timeLeft) : "--",
-      timerProgress: timerProgress(state, timeLeft),
+      timerProgress: progress,
+      timerTone: timerTone(progress),
       urgent: timingActive && timeLeft <= 3,
       item,
       itemDescription: activeItem ? await TextEditor.enrichHTML(activeItem.description || "", { async: true }) : "<p>The velvet curtain has not lifted yet.</p>",
@@ -502,6 +620,12 @@ class MidnightAuctionApp extends Application {
       npcBidders,
       npcSlots: npcBidderSlots(npcBidders),
       showSettings: this._showSettings,
+      activeAuctionName: activeAuctionName(),
+      auctionProfiles: profiles.map((profile) => ({
+        ...profile,
+        active: profile.id === currentAuctionId
+      })),
+      canSaveAuction: profiles.length < 3 || Boolean(currentAuctionId),
       settings: {
         timerMode: mode,
         timerOptions: [
@@ -515,6 +639,12 @@ class MidnightAuctionApp extends Application {
         previewEnabled: previewEnabled(),
         previewSeconds: previewSeconds(),
         auctionPhoto: game.settings.get(MODULE_ID, AUCTION_PHOTO_SETTING) || "",
+        transferItemToWinner: Boolean(game.settings.get(MODULE_ID, TRANSFER_ITEM_SETTING)),
+        winnerSoundEnabled: Boolean(game.settings.get(MODULE_ID, WINNER_SOUND_ENABLED_SETTING)),
+        winnerSound: game.settings.get(MODULE_ID, WINNER_SOUND_SETTING) || "",
+        auctionStartSoundEnabled: Boolean(game.settings.get(MODULE_ID, AUCTION_START_SOUND_ENABLED_SETTING)),
+        auctionStartSound: game.settings.get(MODULE_ID, AUCTION_START_SOUND_SETTING) || "",
+        autoOpenPlayers: Boolean(game.settings.get(MODULE_ID, AUTO_OPEN_PLAYERS_SETTING)),
         startingBidPercent: Number(game.settings.get(MODULE_ID, STARTING_BID_PERCENT_SETTING)) || 0,
         roundCount: configuredRoundCount(),
         defaultIncrement: Number(game.settings.get(MODULE_ID, DEFAULT_INCREMENT_SETTING)) || 10,
@@ -565,6 +695,11 @@ class MidnightAuctionApp extends Application {
     html.find("[data-action='refresh']").on("click", () => this.render(false));
     html.find("[data-action='stop-auction']").on("click", () => this._onStopAuction());
     html.find("[data-action='toggle-settings']").on("click", () => this._onToggleSettings());
+    html.find("[data-action='save-auction']").on("click", () => this._onSaveAuction());
+    html.find("[data-action='new-auction']").on("click", () => this._onNewAuction());
+    html.find("[data-action='load-auction']").on("click", (event) => this._onLoadAuction(event));
+    html.find("[data-action='delete-auction']").on("click", (event) => this._onDeleteAuction(event));
+    html.find("[data-action='backup-auction']").on("click", () => this._onBackupAuction());
     html.find("[data-action='select-round']").on("click", (event) => this._onSelectRound(event));
     html.find("[data-action='delete-item']").on("click", (event) => this._onDeleteItem(event));
     html.find("[data-action='start-round']").on("click", (event) => this._onStartRound(event));
@@ -624,6 +759,119 @@ class MidnightAuctionApp extends Application {
     this.render(false);
   }
 
+  async _onSaveAuction() {
+    if (!game.user.isGM) return;
+    const profiles = getAuctionProfiles();
+    const currentId = activeAuctionId();
+    const existing = profiles.find((profile) => profile.id === currentId);
+    if (!existing && profiles.length >= 3) return ui.notifications.warn("Midnight Auction can keep three saved auctions at once.");
+
+    const currentName = existing?.name || activeAuctionName();
+    new Dialog({
+      title: "Save Auction",
+      content: `<form><div class="form-group"><label>Name</label><input type="text" name="name" value="${escapeHtml(currentName)}"></div></form>`,
+      buttons: {
+        save: {
+          icon: '<i class="fas fa-save"></i>',
+          label: "Save",
+          callback: async (html) => {
+            const name = html.find("[name='name']").val()?.trim() || "Midnight Auction";
+            const catalog = getCatalog();
+            const nextProfiles = getAuctionProfiles();
+            const index = nextProfiles.findIndex((profile) => profile.id === currentId);
+            const profile = {
+              id: currentId || randomId(),
+              name,
+              catalog
+            };
+            if (index >= 0) nextProfiles[index] = profile;
+            else nextProfiles.push(profile);
+            await setAuctionProfiles(nextProfiles);
+            await game.settings.set(MODULE_ID, ACTIVE_AUCTION_SETTING, profile.id);
+            renderAuctionApps();
+            game.socket.emit(SOCKET, { type: "profiles" });
+            ui.notifications.info(`${name} saved.`);
+          }
+        },
+        cancel: {
+          icon: '<i class="fas fa-times"></i>',
+          label: "Cancel"
+        }
+      },
+      default: "save"
+    }).render(true);
+  }
+
+  async _onNewAuction() {
+    if (!game.user.isGM) return;
+    await game.settings.set(MODULE_ID, ACTIVE_AUCTION_SETTING, "");
+    await setCatalog(defaultCatalog());
+    await setState({ ...defaultState(), message: "New auction started. Save it when the rounds are ready." });
+    this._selectedRoundId = null;
+    ui.notifications.info("New auction started.");
+  }
+
+  async _onLoadAuction(event) {
+    if (!game.user.isGM) return;
+    const profileId = event.currentTarget.dataset.profileId;
+    const profile = getAuctionProfiles().find((candidate) => candidate.id === profileId);
+    if (!profile) return;
+    await setCatalog(profile.catalog);
+    await game.settings.set(MODULE_ID, ACTIVE_AUCTION_SETTING, profile.id);
+    await setState({ ...defaultState(), message: `${profile.name} is loaded.` });
+    ui.notifications.info(`${profile.name} loaded.`);
+  }
+
+  async _onDeleteAuction(event) {
+    if (!game.user.isGM) return;
+    const profileId = event.currentTarget.dataset.profileId;
+    const profiles = getAuctionProfiles().filter((profile) => profile.id !== profileId);
+    await setAuctionProfiles(profiles);
+    if (activeAuctionId() === profileId) {
+      await game.settings.set(MODULE_ID, ACTIVE_AUCTION_SETTING, "");
+      renderAuctionApps();
+      game.socket.emit(SOCKET, { type: "profiles" });
+    }
+  }
+
+  async _onBackupAuction() {
+    if (!game.user.isGM) return;
+    const name = activeAuctionName();
+    const payload = {
+      name,
+      backedUpAt: new Date().toISOString(),
+      catalog: getCatalog()
+    };
+    try {
+      let pack = game.packs.get("world.midnight-auction-backups");
+      if (!pack && globalThis.CompendiumCollection?.createCompendium) {
+        pack = await globalThis.CompendiumCollection.createCompendium({
+          type: "JournalEntry",
+          label: "Midnight Auction Backups",
+          name: "midnight-auction-backups",
+          package: "world"
+        });
+      }
+      if (!pack) throw new Error("Backup compendium is not available.");
+
+      const entry = await JournalEntry.create({
+        name: `${name} Backup`,
+        pages: [{
+          name: "Auction Data",
+          type: "text",
+          text: {
+            format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML,
+            content: `<pre>${escapeHtml(JSON.stringify(payload, null, 2))}</pre>`
+          }
+        }]
+      }, { pack: pack.collection });
+      ui.notifications.info(`Backed up ${entry.name} to Midnight Auction Backups.`);
+    } catch (err) {
+      console.error(err);
+      ui.notifications.warn("Could not create the compendium backup. Check the console for details.");
+    }
+  }
+
   async _onAddItem(roundId, itemDocument = null) {
     if (!game.user.isGM) return;
     const catalog = getCatalog();
@@ -633,6 +881,7 @@ class MidnightAuctionApp extends Application {
     const itemData = itemDocument ? this._lotFromItem(itemDocument) : null;
     round.items.push({
       id: randomId(),
+      itemUuid: itemData?.itemUuid || "",
       name: itemData?.name || "New Auction Lot",
       img: itemData?.img || "icons/svg/item-bag.svg",
       sceneImg: "",
@@ -648,6 +897,7 @@ class MidnightAuctionApp extends Application {
     const value = itemMarketPrice(item);
     return {
       name: item.name,
+      itemUuid: item.uuid,
       img: item.img || "icons/svg/item-bag.svg",
       description: foundry.utils.getProperty(item, "system.description.value") || "",
       marketPrice: value,
@@ -703,6 +953,7 @@ class MidnightAuctionApp extends Application {
         message: `${round.title || `Round ${round.number}`} begins. ${firstItem.name} is on the block.`
       });
       notifyAll(`${round.title || `Round ${round.number}`} begins with ${firstItem.name}.`);
+      invitePlayersToAuction(`${round.title || `Round ${round.number}`} has begun.`);
       return;
     }
 
@@ -722,6 +973,7 @@ class MidnightAuctionApp extends Application {
       message: `${round.title || `Round ${round.number}`} has no lots yet.`
     });
     notifyAll(`${round.title || `Round ${round.number}`} has no lots yet.`);
+    invitePlayersToAuction(`${round.title || `Round ${round.number}`} has begun.`);
   }
 
   async _onEndRound(event) {
@@ -822,13 +1074,17 @@ class MidnightAuctionApp extends Application {
       if (!round || !item || state.itemId !== itemId) return;
 
       const winningBid = state.bids?.[0];
-      if (winningBid) await this._settleWinningBid(winningBid);
+      const transferred = winningBid ? await this._settleWinningBid(winningBid, item) : false;
       const completedItemIds = [...new Set([...(state.completedItemIds ?? []), item.id])];
       const nextItem = itemAfter(round, item.id, state.completedItemIds ?? []);
 
       const message = winningBid
         ? `${winningBid.bidderName} wins ${item.name} for ${winningBid.amount} gp.`
         : `${item.name} received no bids.`;
+      if (winningBid) {
+        await postWinnerChat(winningBid, item, { transferred });
+        playWinnerSound();
+      }
       notifyAll(message);
 
       if (nextItem) {
@@ -857,12 +1113,30 @@ class MidnightAuctionApp extends Application {
     }
   }
 
-  async _settleWinningBid(winningBid) {
-    if (!winningBid.actorUuid) return;
+  async _settleWinningBid(winningBid, item) {
+    if (!winningBid.actorUuid) return false;
     const winnerActor = await fromUuid(winningBid.actorUuid);
-    if (!winnerActor) return;
+    if (!winnerActor) return false;
     const gold = getCurrencyGp(winnerActor);
     await setCurrencyGp(winnerActor, gold - winningBid.amount);
+    if (!game.settings.get(MODULE_ID, TRANSFER_ITEM_SETTING)) return false;
+
+    const sourceItem = item.itemUuid ? await fromUuid(item.itemUuid) : null;
+    const itemData = sourceItem
+      ? sourceItem.toObject()
+      : {
+        name: item.name,
+        type: "loot",
+        img: item.img || "icons/svg/item-bag.svg",
+        system: {
+          description: {
+            value: item.description || ""
+          }
+        }
+      };
+    delete itemData._id;
+    await winnerActor.createEmbeddedDocuments("Item", [itemData]);
+    return true;
   }
 
   async _onNpcBid() {
@@ -977,7 +1251,11 @@ class MidnightAuctionApp extends Application {
       PREVIEW_SECONDS_SETTING
     ]);
     const booleanSettings = new Set([
-      PREVIEW_ENABLED_SETTING
+      PREVIEW_ENABLED_SETTING,
+      TRANSFER_ITEM_SETTING,
+      WINNER_SOUND_ENABLED_SETTING,
+      AUCTION_START_SOUND_ENABLED_SETTING,
+      AUTO_OPEN_PLAYERS_SETTING
     ]);
     let value = event.currentTarget.value;
     if (booleanSettings.has(setting)) value = event.currentTarget.checked;
@@ -1234,6 +1512,74 @@ Hooks.once("init", () => {
     default: defaultNpcBidders()
   });
 
+  game.settings.register(MODULE_ID, TRANSFER_ITEM_SETTING, {
+    name: "Transfer Item to Winner",
+    hint: "When a player wins, copy the auctioned item to their assigned character.",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
+  });
+
+  game.settings.register(MODULE_ID, WINNER_SOUND_ENABLED_SETTING, {
+    name: "Play Winner Sound",
+    hint: "Play a table-wide sound when a lot has a winner.",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
+  });
+
+  game.settings.register(MODULE_ID, WINNER_SOUND_SETTING, {
+    name: "Winner Sound",
+    hint: "Audio path to play when a lot is won.",
+    scope: "world",
+    config: true,
+    type: String,
+    default: ""
+  });
+
+  game.settings.register(MODULE_ID, AUCTION_START_SOUND_ENABLED_SETTING, {
+    name: "Play Auction Start Sound",
+    hint: "Play a table-wide sound when a round starts.",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
+  });
+
+  game.settings.register(MODULE_ID, AUCTION_START_SOUND_SETTING, {
+    name: "Auction Start Sound",
+    hint: "Audio path to play when a round starts.",
+    scope: "world",
+    config: true,
+    type: String,
+    default: ""
+  });
+
+  game.settings.register(MODULE_ID, AUTO_OPEN_PLAYERS_SETTING, {
+    name: "Open Players on Round Start",
+    hint: "When a round starts, automatically open Midnight Auction for players.",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: true
+  });
+
+  game.settings.register(MODULE_ID, AUCTION_PROFILES_SETTING, {
+    scope: "world",
+    config: false,
+    type: Object,
+    default: []
+  });
+
+  game.settings.register(MODULE_ID, ACTIVE_AUCTION_SETTING, {
+    scope: "world",
+    config: false,
+    type: String,
+    default: ""
+  });
+
   game.settings.register(MODULE_ID, ROUND_COUNT_SETTING, {
     name: "Auction Rounds",
     hint: "How many fixed round tabs the GM sees, from 1 to 10.",
@@ -1285,7 +1631,8 @@ Hooks.once("init", () => {
 Hooks.once("ready", async () => {
   game.socket.on(SOCKET, async (data) => {
     if (data.type === "bid") return processBid(data);
-    if (["state", "catalog", "npc-bidders", "settings"].includes(data.type)) return renderAuctionApps();
+    if (data.type === "open-auction") return handleAuctionInvite(data.message);
+    if (["state", "catalog", "npc-bidders", "settings", "profiles"].includes(data.type)) return renderAuctionApps();
     if (data.type === "notify") {
       if (!data.userId || data.userId === game.user.id) ui.notifications.info(data.message);
       return renderAuctionApps();
