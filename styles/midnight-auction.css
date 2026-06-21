@@ -460,14 +460,18 @@
 }
 
 .ma-round-tabs button {
-  flex: 0 0 auto;
+  flex: 0 0 max-content;
   position: relative;
   top: 1px;
+  width: auto;
   min-width: 100px;
+  max-width: max-content;
+  padding: 4px 14px;
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
   border-bottom: 1px solid var(--ma-line);
   opacity: 0.82;
+  white-space: nowrap;
 }
 
 .ma-round-tabs button.is-selected {
