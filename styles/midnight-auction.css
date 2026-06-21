@@ -295,23 +295,29 @@
 
 .ma-round-tabs {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   margin-top: 10px;
-  padding-bottom: 0;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--ma-line);
   overflow-x: auto;
 }
 
 .ma-round-tabs button {
   flex: 0 0 auto;
+  position: relative;
+  top: 1px;
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
+  border-bottom: 1px solid var(--ma-line);
   opacity: 0.82;
+  min-width: 100px;
 }
 
 .ma-round-tabs button.is-selected {
   opacity: 1;
   font-weight: 700;
   border-bottom-color: transparent;
+  background: rgba(255, 255, 255, 0.28);
 }
 
 .ma-round-tabs button.is-live::after {
@@ -347,6 +353,8 @@
 
 .ma-round {
   margin-top: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
 }
 
 .ma-round.is-active {
@@ -397,6 +405,14 @@
 .ma-drop-row.is-active {
   border-color: var(--ma-highlight);
   box-shadow: 0 0 0 1px rgba(122, 79, 19, 0.18);
+}
+
+.ma-drop-row.is-complete {
+  opacity: 0.62;
+}
+
+.ma-drop-row.is-complete span {
+  text-decoration: line-through;
 }
 
 .ma-delete-item {

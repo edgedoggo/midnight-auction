@@ -96,7 +96,7 @@
           <div class="ma-panel-title">Drop auction items here</div>
           <div class="ma-drop-list">
             {{#each selectedRound.items}}
-            <div class="ma-drop-row {{#if active}}is-active{{/if}}">
+            <div class="ma-drop-row {{#if active}}is-active{{/if}} {{#if complete}}is-complete{{/if}}">
               <span>{{name}}</span>
               <button type="button" data-action="start-item" data-item-id="{{id}}">Start</button>
               <button type="button" data-action="end-item" data-item-id="{{id}}">End</button>

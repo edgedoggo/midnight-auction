@@ -31,6 +31,7 @@ function defaultState() {
       count: 0,
       bidderId: null
     },
+    completedItemIds: [],
     bids: [],
     message: "The auction house is waiting for the next lot."
   };
@@ -170,6 +171,20 @@ function findLot(catalog, itemId) {
 function activeLot(catalog, state = getState()) {
   if (!state.itemId) return { round: null, item: null };
   return findLot(catalog, state.itemId);
+}
+
+function firstOpenItem(round, completedItemIds = []) {
+  const completed = new Set(completedItemIds ?? []);
+  return round?.items.find((item) => !completed.has(item.id)) ?? null;
+}
+
+function itemAfter(round, itemId, completedItemIds = []) {
+  if (!round) return null;
+  const completed = new Set(completedItemIds ?? []);
+  completed.add(itemId);
+  const index = round.items.findIndex((item) => item.id === itemId);
+  const laterItem = round.items.slice(index + 1).find((item) => !completed.has(item.id));
+  return laterItem ?? round.items.find((item) => !completed.has(item.id)) ?? null;
 }
 
 function nextBidFor(item, state) {
@@ -362,6 +377,7 @@ class MidnightAuctionApp extends Application {
     const gold = goldActor ? getCurrencyGp(goldActor) : 0;
     const nextBid = nextBidFor(activeItem, state);
     const selectedRound = this._selectedRound(catalog, state);
+    const completed = new Set(state.completedItemIds ?? []);
     const npcBidders = getNpcBidders().map((bidder, index) => ({
       ...bidder,
       number: index + 1
@@ -409,6 +425,7 @@ class MidnightAuctionApp extends Application {
         items: catalogRound.items.map((lot) => ({
           ...lot,
           active: state.itemId === lot.id,
+          complete: completed.has(lot.id),
           increment: Number(lot.increment) || Number(game.settings.get(MODULE_ID, DEFAULT_INCREMENT_SETTING)) || 1
         }))
       })),
@@ -419,6 +436,7 @@ class MidnightAuctionApp extends Application {
           items: selectedRound.items.map((lot) => ({
             ...lot,
             active: state.itemId === lot.id,
+            complete: completed.has(lot.id),
             increment: Number(lot.increment) || Number(game.settings.get(MODULE_ID, DEFAULT_INCREMENT_SETTING)) || 1
           }))
         }
@@ -570,6 +588,17 @@ class MidnightAuctionApp extends Application {
     const catalog = getCatalog();
     const round = findRound(catalog, event.currentTarget.dataset.roundId);
     if (!round) return;
+    this._selectedRoundId = round.id;
+
+    const firstItem = firstOpenItem(round, []);
+    if (firstItem) {
+      await this._startLot(round, firstItem, {
+        completedItemIds: [],
+        message: `${round.title || `Round ${round.number}`} begins. ${firstItem.name} is on the block.`
+      });
+      notifyAll(`${round.title || `Round ${round.number}`} begins with ${firstItem.name}.`);
+      return;
+    }
 
     await setState({
       ...getState(),
@@ -580,10 +609,11 @@ class MidnightAuctionApp extends Application {
       endsAt: null,
       winnerUserId: null,
       winnerActorUuid: null,
+      completedItemIds: [],
       bids: [],
-      message: `${round.title || `Round ${round.number}`} is now live. The next lot is coming up.`
+      message: `${round.title || `Round ${round.number}`} has no lots yet.`
     });
-    notifyAll(`${round.title || `Round ${round.number}`} of the Midnight Auction is live.`);
+    notifyAll(`${round.title || `Round ${round.number}`} has no lots yet.`);
   }
 
   async _onEndRound(event) {
@@ -600,6 +630,7 @@ class MidnightAuctionApp extends Application {
       currentPrice: 0,
       endsAt: null,
       bids: [],
+      completedItemIds: [],
       message: `${round.title || `Round ${round.number}`} has ended.`
     });
     notifyAll(`${round.title || `Round ${round.number}`} has ended.`);
@@ -610,7 +641,13 @@ class MidnightAuctionApp extends Application {
     const catalog = getCatalog();
     const { round, item } = findLot(catalog, event.currentTarget.dataset.itemId);
     if (!round || !item) return;
+    const state = getState();
+    const completedItemIds = (state.completedItemIds ?? []).filter((id) => id !== item.id);
+    await this._startLot(round, item, { completedItemIds });
+    notifyAll(`${item.name} is live at the Midnight Auction.`);
+  }
 
+  async _startLot(round, item, { completedItemIds = getState().completedItemIds ?? [], message = null } = {}) {
     const startingPrice = Number(item.startingPrice) || 0;
     await setState({
       status: "item",
@@ -625,10 +662,10 @@ class MidnightAuctionApp extends Application {
         count: 0,
         bidderId: null
       },
+      completedItemIds,
       bids: [],
-      message: `${item.name} is on the block. Opening bid: ${startingPrice} gp.`
+      message: message || `${item.name} is on the block. Opening bid: ${startingPrice} gp.`
     });
-    notifyAll(`${item.name} is live at the Midnight Auction.`);
   }
 
   async _onEndItem(event) {
@@ -638,22 +675,38 @@ class MidnightAuctionApp extends Application {
       const catalog = getCatalog();
       const state = getState();
       const itemId = event.currentTarget.dataset.itemId || state.itemId;
-      const { item } = findLot(catalog, itemId);
-      if (!item || state.itemId !== itemId) return;
+      const { round, item } = findLot(catalog, itemId);
+      if (!round || !item || state.itemId !== itemId) return;
 
       const winningBid = state.bids?.[0];
       if (winningBid) await this._settleWinningBid(winningBid);
+      const completedItemIds = [...new Set([...(state.completedItemIds ?? []), item.id])];
+      const nextItem = itemAfter(round, item.id, state.completedItemIds ?? []);
 
       const message = winningBid
         ? `${winningBid.bidderName} wins ${item.name} for ${winningBid.amount} gp.`
         : `${item.name} received no bids.`;
+      notifyAll(message);
+
+      if (nextItem) {
+        await this._startLot(round, nextItem, {
+          completedItemIds,
+          message: `${message} Next lot: ${nextItem.name}.`
+        });
+        notifyAll(`${nextItem.name} is now on the block.`);
+        return;
+      }
+
       await setState({
         ...state,
         status: "sold",
+        itemId: null,
+        currentPrice: 0,
         endsAt: null,
-        message
+        completedItemIds,
+        message: `${message} ${round.title || `Round ${round.number}`} is complete.`
       });
-      notifyAll(message);
+      notifyAll(`${round.title || `Round ${round.number}`} is complete.`);
     } finally {
       this._ending = false;
     }

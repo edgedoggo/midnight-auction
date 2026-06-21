@@ -17,6 +17,7 @@ A tiny Foundry VTT v11 module for running quick, dramatic auctions in DnD5e.
 - Use the round tabs to move between fixed auction rounds.
 - Drag items from the sidebar onto the selected round's drop area to add lots.
 - Lots appear as a compact GM-only list with Start, End, and remove controls.
+- Starting a round begins the first lot, and completed lots automatically advance to the next lot in that round.
 - Click **Start Round**, then **Start** on a lot.
 - Drag actors into **Drop Auction Bidders here** to fill up to 10 placeholder bidder names.
 - Use **NPC Bid** when the room should outbid the players. Repeated NPC bids on a lot settle into one bidder to simulate the rest of the room dropping out.
