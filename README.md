@@ -13,6 +13,7 @@ A tiny Foundry VTT v11 module for running quick, dramatic auctions in DnD5e.
 
 - GMs open the small floating gavel icon. Drag it to move it.
 - The auction window preloads its current artwork before opening to avoid image resize jumps.
+- GMs can use the gear button to configure auction settings during play.
 - Use the round tabs to move between fixed auction rounds.
 - Drag items from the sidebar onto the selected round's drop area to add lots.
 - Lots appear as a compact GM-only list with Start, End, and remove controls.
@@ -26,6 +27,8 @@ A tiny Foundry VTT v11 module for running quick, dramatic auctions in DnD5e.
 ## Settings
 
 - **Bid Timer Mode** controls the countdown: 5, 10, 15, 30, or Sudden Death. Sudden Death starts each lot at 10 seconds and bids do not reset it.
+- **Sudden Death Seconds** controls the sudden-death item timer.
+- **Starting Bid Percent** sets the opening bid from item value, rounded down when an item is dropped.
 - **Auction Rounds** controls how many fixed round tabs the GM sees, from 1 to 10. The default is 4.
 - **Default Bid Increment** controls the fallback increment for items.
 - **NPC Bid Increment** controls how much the GM's NPC Bid button raises the current price.

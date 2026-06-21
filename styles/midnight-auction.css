@@ -224,13 +224,33 @@
 .ma-toolbar,
 .ma-player-controls {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 42px repeat(3, minmax(0, 1fr));
   gap: 8px;
   align-items: center;
 }
 
 .ma-player-controls {
   grid-template-columns: 140px 1fr;
+}
+
+.ma-settings-panel {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(86px, 1fr));
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--ma-line);
+  border-radius: 6px;
+  background: var(--ma-soft);
+}
+
+.ma-settings-panel label {
+  font-size: 11px;
+}
+
+.ma-settings-panel input,
+.ma-settings-panel select {
+  width: 100%;
+  height: 28px;
 }
 
 .ma-npc-panel {
@@ -441,6 +461,7 @@
   .ma-npc-row,
   .ma-toolbar,
   .ma-player-controls,
+  .ma-settings-panel,
   .ma-drop-row {
     grid-template-columns: 1fr;
   }

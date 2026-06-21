@@ -32,10 +32,38 @@
   {{#if isGM}}
   <section class="ma-gm-controls">
     <div class="ma-toolbar">
+      <button type="button" data-action="toggle-settings" title="Auction settings"><i class="fas fa-cog"></i></button>
       <button type="button" data-action="npc-bid" {{#unless canNpcBid}}disabled{{/unless}}><i class="fas fa-user-secret"></i> NPC Bid {{nextNpcBid}} gp</button>
       <button type="button" data-action="refresh"><i class="fas fa-sync"></i> Refresh</button>
       <button type="button" data-action="stop-auction"><i class="fas fa-stop"></i> End Auction</button>
     </div>
+
+    {{#if showSettings}}
+    <section class="ma-settings-panel">
+      <label>Bid Timer
+        <select data-setting="timerMode">
+          {{#each settings.timerOptions}}
+          <option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>
+          {{/each}}
+        </select>
+      </label>
+      <label>Sudden Death
+        <input type="number" min="1" value="{{settings.suddenDeathSeconds}}" data-setting="suddenDeathSeconds">
+      </label>
+      <label>Start %
+        <input type="number" min="0" value="{{settings.startingBidPercent}}" data-setting="startingBidPercent">
+      </label>
+      <label>Rounds
+        <input type="number" min="1" max="10" value="{{settings.roundCount}}" data-setting="roundCount">
+      </label>
+      <label>Bid Step
+        <input type="number" min="1" value="{{settings.defaultIncrement}}" data-setting="defaultIncrement">
+      </label>
+      <label>NPC Step
+        <input type="number" min="1" value="{{settings.npcBidIncrement}}" data-setting="npcBidIncrement">
+      </label>
+    </section>
+    {{/if}}
 
     <section class="ma-npc-panel" data-npc-drop>
       <div class="ma-panel-title">Drop Auction Bidders here</div>

@@ -4,10 +4,12 @@ const SOCKET = `module.${MODULE_ID}`;
 const STATE_SETTING = "state";
 const CATALOG_SETTING = "catalog";
 const TIMER_SETTING = "timerMode";
+const SUDDEN_DEATH_SECONDS_SETTING = "suddenDeathSeconds";
 const DEFAULT_INCREMENT_SETTING = "defaultIncrement";
 const NPC_BID_INCREMENT_SETTING = "npcBidIncrement";
 const NPC_BIDDERS_SETTING = "npcBidders";
 const ROUND_COUNT_SETTING = "roundCount";
+const STARTING_BID_PERCENT_SETTING = "startingBidPercent";
 const SCENE_IMAGES_SETTING = "sceneImages";
 const FLOAT_POSITION_SETTING = "floatingButtonPosition";
 
@@ -190,7 +192,7 @@ function timerMode() {
 
 function timerSeconds() {
   const mode = timerMode();
-  if (mode === "sudden") return 10;
+  if (mode === "sudden") return Math.max(1, Number(game.settings.get(MODULE_ID, SUDDEN_DEATH_SECONDS_SETTING)) || 10);
   return Number(mode) || 10;
 }
 
@@ -200,6 +202,11 @@ function bidResetsTimer() {
 
 function bidRows(state) {
   return (state.bids ?? []).slice(0, 8);
+}
+
+function startingBidForValue(value) {
+  const percent = Math.max(0, Number(game.settings.get(MODULE_ID, STARTING_BID_PERCENT_SETTING)) || 0);
+  return Math.floor((Number(value) || 0) * (percent / 100));
 }
 
 function renderAuctionApps() {
@@ -335,6 +342,7 @@ class MidnightAuctionApp extends Application {
     this._clock = null;
     this._ending = false;
     this._selectedRoundId = null;
+    this._showSettings = false;
   }
 
   async getData() {
@@ -358,6 +366,7 @@ class MidnightAuctionApp extends Application {
       ...bidder,
       number: index + 1
     }));
+    const mode = timerMode();
 
     return {
       isGM: game.user.isGM,
@@ -377,6 +386,22 @@ class MidnightAuctionApp extends Application {
       canNpcBid: Boolean(activeItem && state.status === "item" && npcBidders.some((bidder) => bidder.name?.trim())),
       bids: bidRows(state),
       npcBidders,
+      showSettings: this._showSettings,
+      settings: {
+        timerMode: mode,
+        timerOptions: [
+          { value: "5", label: "5 seconds", selected: mode === "5" },
+          { value: "10", label: "10 seconds", selected: mode === "10" },
+          { value: "15", label: "15 seconds", selected: mode === "15" },
+          { value: "30", label: "30 seconds", selected: mode === "30" },
+          { value: "sudden", label: "Sudden death", selected: mode === "sudden" }
+        ],
+        suddenDeathSeconds: Number(game.settings.get(MODULE_ID, SUDDEN_DEATH_SECONDS_SETTING)) || 10,
+        startingBidPercent: Number(game.settings.get(MODULE_ID, STARTING_BID_PERCENT_SETTING)) || 0,
+        roundCount: configuredRoundCount(),
+        defaultIncrement: Number(game.settings.get(MODULE_ID, DEFAULT_INCREMENT_SETTING)) || 10,
+        npcBidIncrement: Number(game.settings.get(MODULE_ID, NPC_BID_INCREMENT_SETTING)) || 10
+      },
       rounds: catalog.rounds.map((catalogRound) => ({
         ...catalogRound,
         active: state.roundId === catalogRound.id,
@@ -419,6 +444,7 @@ class MidnightAuctionApp extends Application {
     super.activateListeners(html);
     html.find("[data-action='refresh']").on("click", () => this.render(false));
     html.find("[data-action='stop-auction']").on("click", () => this._onStopAuction());
+    html.find("[data-action='toggle-settings']").on("click", () => this._onToggleSettings());
     html.find("[data-action='select-round']").on("click", (event) => this._onSelectRound(event));
     html.find("[data-action='delete-item']").on("click", (event) => this._onDeleteItem(event));
     html.find("[data-action='start-round']").on("click", (event) => this._onStartRound(event));
@@ -428,6 +454,7 @@ class MidnightAuctionApp extends Application {
     html.find("[data-action='npc-bid']").on("click", () => this._onNpcBid());
     html.find("[data-action='bid']").on("click", () => this._onBid());
     html.find("[data-npc-field]").on("change", (event) => this._onNpcFieldChange(event));
+    html.find("[data-setting]").on("change", (event) => this._onSettingChange(event));
     html.find("[data-npc-index], [data-npc-drop]").on("dragover", (event) => event.preventDefault());
     html.find("[data-npc-index], [data-npc-drop]").on("drop", (event) => this._onNpcDrop(event));
     html.find("[data-round-drop]").on("dragover", (event) => event.preventDefault());
@@ -469,6 +496,12 @@ class MidnightAuctionApp extends Application {
     this.render(false);
   }
 
+  _onToggleSettings() {
+    if (!game.user.isGM) return;
+    this._showSettings = !this._showSettings;
+    this.render(false);
+  }
+
   async _onAddItem(roundId, itemDocument = null) {
     if (!game.user.isGM) return;
     const catalog = getCatalog();
@@ -489,11 +522,12 @@ class MidnightAuctionApp extends Application {
   }
 
   _lotFromItem(item) {
+    const value = Number(foundry.utils.getProperty(item, "system.price.value")) || 0;
     return {
       name: item.name,
       img: item.img || "icons/svg/item-bag.svg",
       description: foundry.utils.getProperty(item, "system.description.value") || "",
-      startingPrice: Number(foundry.utils.getProperty(item, "system.price.value")) || 0
+      startingPrice: startingBidForValue(value)
     };
   }
 
@@ -701,6 +735,30 @@ class MidnightAuctionApp extends Application {
     await setNpcBidders(bidders);
   }
 
+  async _onSettingChange(event) {
+    if (!game.user.isGM) return;
+    const setting = event.currentTarget.dataset.setting;
+    const numericSettings = new Set([
+      SUDDEN_DEATH_SECONDS_SETTING,
+      STARTING_BID_PERCENT_SETTING,
+      ROUND_COUNT_SETTING,
+      DEFAULT_INCREMENT_SETTING,
+      NPC_BID_INCREMENT_SETTING
+    ]);
+    let value = event.currentTarget.value;
+    if (numericSettings.has(setting)) value = Number(value) || 0;
+
+    if (setting === ROUND_COUNT_SETTING) value = Math.max(1, Math.min(10, value));
+    if (setting === SUDDEN_DEATH_SECONDS_SETTING) value = Math.max(1, value);
+    if (setting === STARTING_BID_PERCENT_SETTING) value = Math.max(0, Math.min(1000, value));
+    if ([DEFAULT_INCREMENT_SETTING, NPC_BID_INCREMENT_SETTING].includes(setting)) value = Math.max(1, value);
+
+    await game.settings.set(MODULE_ID, setting, value);
+    if (setting === ROUND_COUNT_SETTING) this._selectedRoundId = null;
+    renderAuctionApps();
+    game.socket.emit(SOCKET, { type: "settings" });
+  }
+
   async _onNpcDrop(event) {
     if (!game.user.isGM) return;
     event.preventDefault();
@@ -861,7 +919,7 @@ Hooks.once("init", () => {
 
   game.settings.register(MODULE_ID, TIMER_SETTING, {
     name: "Bid Timer Mode",
-    hint: "How long each accepted bid resets the timer. Sudden Death starts each lot at 10 seconds and bids do not reset it.",
+    hint: "How long each accepted bid resets the timer. Sudden Death uses its own timer and bids do not reset it.",
     scope: "world",
     config: true,
     type: String,
@@ -873,6 +931,24 @@ Hooks.once("init", () => {
       sudden: "Sudden Death: 10 seconds, no resets"
     },
     default: "10"
+  });
+
+  game.settings.register(MODULE_ID, SUDDEN_DEATH_SECONDS_SETTING, {
+    name: "Sudden Death Seconds",
+    hint: "How long a sudden-death lot lasts. Bids do not reset this timer.",
+    scope: "world",
+    config: true,
+    type: Number,
+    default: 10
+  });
+
+  game.settings.register(MODULE_ID, STARTING_BID_PERCENT_SETTING, {
+    name: "Starting Bid Percent",
+    hint: "Opening bid as a percentage of item value, rounded down when the item is dropped into a round.",
+    scope: "world",
+    config: true,
+    type: Number,
+    default: 100
   });
 
   game.settings.register(MODULE_ID, DEFAULT_INCREMENT_SETTING, {
@@ -942,7 +1018,7 @@ Hooks.once("init", () => {
 Hooks.once("ready", async () => {
   game.socket.on(SOCKET, async (data) => {
     if (data.type === "bid") return processBid(data);
-    if (["state", "catalog", "npc-bidders"].includes(data.type)) return renderAuctionApps();
+    if (["state", "catalog", "npc-bidders", "settings"].includes(data.type)) return renderAuctionApps();
     if (data.type === "notify") {
       if (!data.userId || data.userId === game.user.id) ui.notifications.info(data.message);
       return renderAuctionApps();
