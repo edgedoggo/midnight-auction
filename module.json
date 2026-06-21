@@ -1,0 +1,25 @@
+{
+  "id": "midnight-auction",
+  "title": "Midnight Auction",
+  "description": "A simple, playful auction interface for Foundry VTT. Put auction items on a dedicated actor, organize them into rounds, and let players bid with instant table-wide updates.",
+  "version": "1.0.0",
+  "compatibility": {
+    "minimum": "11",
+    "verified": "11"
+  },
+  "authors": [
+    {
+      "name": "Codex"
+    }
+  ],
+  "esmodules": [
+    "scripts/midnight-auction.js"
+  ],
+  "styles": [
+    "styles/midnight-auction.css"
+  ],
+  "socket": true,
+  "url": "",
+  "manifest": "",
+  "download": ""
+}

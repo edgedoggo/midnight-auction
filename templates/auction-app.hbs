@@ -1,0 +1,103 @@
+<form class="midnight-auction {{#if isGM}}is-gm{{else}}is-player{{/if}}">
+  <section class="ma-stage">
+    <img class="ma-scene" src="{{sceneImage}}" alt="Auction scene">
+    <div class="ma-stage-shade">
+      <div>
+        <h1>{{title}}</h1>
+        <p>{{subtitle}}</p>
+      </div>
+      <div class="ma-timer {{#if urgent}}is-urgent{{/if}}">
+        <span>{{timerLabel}}</span>
+        <strong>{{timeLeft}}</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="ma-current">
+    <div class="ma-item-image-wrap">
+      <img class="ma-item-image" src="{{item.img}}" alt="{{item.name}}">
+    </div>
+    <div class="ma-item-detail">
+      <div class="ma-eyebrow">Current Lot</div>
+      <h2>{{item.name}}</h2>
+      <div class="ma-description">{{{itemDescription}}}</div>
+    </div>
+    <div class="ma-price">
+      <span>Current Price</span>
+      <strong>{{currentPrice}} gp</strong>
+      <small>Next bid: {{nextBid}} gp</small>
+    </div>
+  </section>
+
+  {{#if isGM}}
+  <section class="ma-gm-controls">
+    <div class="ma-toolbar">
+      <button type="button" data-action="create-actor"><i class="fas fa-user-plus"></i> Auction Actor</button>
+      <button type="button" data-action="open-actor" {{#unless actor}}disabled{{/unless}}><i class="fas fa-id-card"></i> Open Actor</button>
+      <button type="button" data-action="refresh"><i class="fas fa-sync"></i> Refresh</button>
+      <button type="button" data-action="stop-auction"><i class="fas fa-stop"></i> End Auction</button>
+    </div>
+
+    {{#unless actor}}
+    <p class="ma-empty">Create the auction actor, then drag items onto it. Set each lot's round, starting price, and bid increment below.</p>
+    {{/unless}}
+
+    {{#each rounds}}
+    <article class="ma-round">
+      <header>
+        <h3>Round {{number}}</h3>
+        <div>
+          <button type="button" data-action="start-round" data-round="{{number}}">Start Round</button>
+          <button type="button" data-action="end-round" data-round="{{number}}">End Round</button>
+        </div>
+      </header>
+      <div class="ma-lots">
+        {{#each items}}
+        <div class="ma-lot {{#if active}}is-active{{/if}}">
+          <img src="{{img}}" alt="{{name}}">
+          <div class="ma-lot-main">
+            <strong>{{name}}</strong>
+            <div class="ma-lot-fields">
+              <label>Round <input type="number" min="1" value="{{round}}" data-action="item-round" data-item-id="{{id}}"></label>
+              <label>Start <input type="number" min="0" value="{{startingPrice}}" data-action="item-start" data-item-id="{{id}}"></label>
+              <label>Increment <input type="number" min="1" value="{{increment}}" data-action="item-increment" data-item-id="{{id}}"></label>
+            </div>
+          </div>
+          <div class="ma-lot-actions">
+            <button type="button" data-action="start-item" data-item-id="{{id}}">Start</button>
+            <button type="button" data-action="end-item" data-item-id="{{id}}">End</button>
+          </div>
+        </div>
+        {{/each}}
+      </div>
+    </article>
+    {{/each}}
+  </section>
+  {{else}}
+  <section class="ma-player-controls">
+    <div class="ma-wallet">
+      <span>Your Gold</span>
+      <strong>{{gold}} gp</strong>
+    </div>
+    <button class="ma-bid" type="button" data-action="bid" {{#unless canBid}}disabled{{/unless}}>
+      Bid {{nextBid}} gp
+    </button>
+  </section>
+  {{/if}}
+
+  <section class="ma-log">
+    <h3>Latest Bids</h3>
+    {{#if bids.length}}
+    <ol>
+      {{#each bids}}
+      <li>
+        <strong>{{bidderName}}</strong>
+        <span>{{amount}} gp</span>
+      </li>
+      {{/each}}
+    </ol>
+    {{else}}
+    <p>No bids yet.</p>
+    {{/if}}
+  </section>
+</form>

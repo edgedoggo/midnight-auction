@@ -1,0 +1,306 @@
+.midnight-auction-window .window-content {
+  padding: 0;
+  background: #171318;
+  color: #f5efe6;
+}
+
+.midnight-auction {
+  --ma-gold: #e8bf5a;
+  --ma-ink: #171318;
+  --ma-panel: #241d26;
+  --ma-line: rgba(255, 255, 255, 0.14);
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.ma-stage {
+  position: relative;
+  min-height: 230px;
+  overflow: hidden;
+  border: 1px solid var(--ma-line);
+  border-radius: 6px;
+  background: #08070a;
+}
+
+.ma-scene {
+  width: 100%;
+  height: 100%;
+  min-height: 230px;
+  object-fit: cover;
+  display: block;
+}
+
+.ma-stage-shade {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  padding: 18px;
+  background: linear-gradient(180deg, rgba(10, 8, 12, 0.1), rgba(10, 8, 12, 0.82));
+}
+
+.ma-stage h1,
+.ma-current h2,
+.ma-log h3,
+.ma-round h3 {
+  margin: 0;
+  color: #fff8e8;
+}
+
+.ma-stage p {
+  margin: 4px 0 0;
+  color: #d8cfc2;
+}
+
+.ma-timer {
+  min-width: 112px;
+  text-align: center;
+  border: 1px solid rgba(232, 191, 90, 0.45);
+  border-radius: 6px;
+  padding: 10px;
+  background: rgba(18, 14, 20, 0.78);
+}
+
+.ma-timer span,
+.ma-price span,
+.ma-wallet span,
+.ma-eyebrow {
+  display: block;
+  font-size: 11px;
+  line-height: 1.2;
+  text-transform: uppercase;
+  color: #b7aa9a;
+}
+
+.ma-timer strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--ma-gold);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.ma-timer.is-urgent strong {
+  color: #ff6b5f;
+}
+
+.ma-current {
+  display: grid;
+  grid-template-columns: 120px 1fr 150px;
+  gap: 12px;
+  align-items: stretch;
+  padding: 12px;
+  border: 1px solid var(--ma-line);
+  border-radius: 6px;
+  background: var(--ma-panel);
+}
+
+.ma-item-image-wrap {
+  min-height: 120px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #0d0b10;
+}
+
+.ma-item-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ma-description {
+  max-height: 142px;
+  overflow: auto;
+  color: #efe7da;
+}
+
+.ma-description p {
+  margin-top: 6px;
+}
+
+.ma-price,
+.ma-wallet {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.ma-price strong,
+.ma-wallet strong {
+  color: var(--ma-gold);
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.ma-price small {
+  color: #cfc3b4;
+}
+
+.ma-toolbar,
+.ma-player-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.ma-toolbar button,
+.ma-lot-actions button,
+.ma-round header button,
+.ma-bid {
+  border: 1px solid rgba(232, 191, 90, 0.42);
+  border-radius: 5px;
+  background: #3a2b22;
+  color: #fff3d3;
+}
+
+.ma-toolbar button:disabled,
+.ma-lot-actions button:disabled,
+.ma-bid:disabled {
+  opacity: 0.55;
+}
+
+.ma-bid {
+  min-height: 56px;
+  flex: 1;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.ma-wallet {
+  width: 140px;
+  min-height: 56px;
+}
+
+.ma-round,
+.ma-log {
+  border: 1px solid var(--ma-line);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ma-round {
+  margin-top: 10px;
+}
+
+.ma-round header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid var(--ma-line);
+}
+
+.ma-lots {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.ma-lot {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.ma-lot.is-active {
+  border-color: var(--ma-gold);
+  box-shadow: 0 0 0 1px rgba(232, 191, 90, 0.24);
+}
+
+.ma-lot img {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.ma-lot-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(82px, 1fr));
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.ma-lot-fields label {
+  color: #cdbfac;
+  font-size: 11px;
+}
+
+.ma-lot-fields input {
+  width: 100%;
+  height: 26px;
+}
+
+.ma-lot-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.ma-log {
+  padding: 10px;
+}
+
+.ma-log ol {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ma-log li {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.ma-empty,
+.ma-log p {
+  margin: 8px 0 0;
+  color: #cfc3b4;
+}
+
+@media (max-width: 720px) {
+  .ma-current {
+    grid-template-columns: 92px 1fr;
+  }
+
+  .ma-price {
+    grid-column: 1 / -1;
+    min-height: 72px;
+  }
+
+  .ma-stage-shade,
+  .ma-player-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ma-wallet {
+    width: 100%;
+  }
+
+  .ma-lot {
+    grid-template-columns: 44px 1fr;
+  }
+
+  .ma-lot-actions {
+    grid-column: 1 / -1;
+  }
+}
