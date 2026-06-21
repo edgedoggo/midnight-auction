@@ -12,6 +12,7 @@ A tiny Foundry VTT v11 module for running quick, dramatic auctions in DnD5e.
 ## Use
 
 - GMs open the small floating gavel icon. Drag it to move it.
+- The auction window preloads its current artwork before opening to avoid image resize jumps.
 - Use the round tabs to move between fixed auction rounds.
 - Drag items from the sidebar onto the selected round's drop bar to add lots.
 - Set each lot's name, image, scene image, description, starting price, and bid increment.

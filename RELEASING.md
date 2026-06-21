@@ -4,14 +4,14 @@ This repo publishes releases automatically when a version tag is pushed.
 
 ## Release a new version
 
-1. Update `version` in `module.json`, such as `1.0.4`.
+1. Update `version` in `module.json`, such as `1.0.5`.
 2. Commit the change.
 3. Tag the commit with the matching version:
 
    ```bash
-   git tag v1.0.4
+   git tag v1.0.5
    git push
-   git push origin v1.0.4
+   git push origin v1.0.5
    ```
 
 GitHub Actions will create a GitHub Release with:

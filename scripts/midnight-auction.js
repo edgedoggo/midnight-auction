@@ -794,9 +794,83 @@ async function processBid(data) {
   notifyAll(`${bidder.name} bids ${amount} gp on ${item.name}.`);
 }
 
-function openAuction() {
+function currentAuctionImages() {
+  const catalog = getCatalog();
+  const state = getState();
+  const { item } = activeLot(catalog, state);
+  const images = sceneImages();
+  return [
+    item?.sceneImg || images[state.status] || images.idle,
+    item?.img || "icons/svg/item-bag.svg"
+  ].filter(Boolean);
+}
+
+function showAuctionLoading() {
+  const existing = document.getElementById("midnight-auction-loading");
+  if (existing) return existing;
+
+  const loader = document.createElement("div");
+  loader.id = "midnight-auction-loading";
+  loader.innerHTML = `
+    <div class="ma-loading-box">
+      <strong>Midnight Auction</strong>
+      <span>Loading artwork...</span>
+      <div class="ma-loading-bar"><i style="width: 12%"></i></div>
+    </div>
+  `;
+  document.body.appendChild(loader);
+  return loader;
+}
+
+function setAuctionLoadingProgress(loader, loaded, total) {
+  const bar = loader?.querySelector(".ma-loading-bar i");
+  if (!bar) return;
+  const percent = total ? Math.max(12, Math.round((loaded / total) * 100)) : 100;
+  bar.style.width = `${percent}%`;
+}
+
+function preloadImage(src) {
+  return new Promise((resolve) => {
+    if (!src) return resolve();
+    const image = new Image();
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      resolve();
+    };
+    const timeout = window.setTimeout(done, 2500);
+    image.onload = () => {
+      window.clearTimeout(timeout);
+      done();
+    };
+    image.onerror = () => {
+      window.clearTimeout(timeout);
+      done();
+    };
+    image.src = src;
+  });
+}
+
+async function preloadAuctionImages() {
+  const loader = showAuctionLoading();
+  const sources = [...new Set(currentAuctionImages())];
+  let loaded = 0;
+  setAuctionLoadingProgress(loader, loaded, sources.length);
+
+  for (const source of sources) {
+    await preloadImage(source);
+    loaded += 1;
+    setAuctionLoadingProgress(loader, loaded, sources.length);
+  }
+
+  window.setTimeout(() => loader?.remove(), 120);
+}
+
+async function openAuction() {
   const existing = Object.values(ui.windows).find((app) => app instanceof MidnightAuctionApp);
   if (existing) return existing.render(true);
+  await preloadAuctionImages();
   return new MidnightAuctionApp().render(true);
 }
 
