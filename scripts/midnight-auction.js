@@ -244,18 +244,11 @@ function nextBidFor(item, state) {
 }
 
 function nextNpcBidFor(item, state) {
-  if (!item) return 0;
-  const current = Number(state.currentPrice) || 0;
-  const increment = npcBidIncrement();
-  return state.bids?.length ? current + increment : Math.max(current, effectiveStartingPrice(item));
+  return nextBidFor(item, state);
 }
 
 function bidIncrement() {
   return Math.max(1, Number(game.settings.get(MODULE_ID, DEFAULT_INCREMENT_SETTING)) || 1);
-}
-
-function npcBidIncrement() {
-  return Math.max(1, Number(game.settings.get(MODULE_ID, NPC_BID_INCREMENT_SETTING)) || 1);
 }
 
 function timerMode() {
@@ -777,7 +770,6 @@ class MidnightAuctionApp extends Application {
 
   activateListeners(html) {
     super.activateListeners(html);
-    html.find("[data-action='refresh']").on("click", () => this.render(false));
     html.find("[data-action='stop-auction']").on("click", () => this._onStopAuction());
     html.find("[data-action='toggle-settings']").on("click", () => this._onToggleSettings());
     html.find("[data-action='toggle-bidders']").on("click", () => this._onToggleBidders());
