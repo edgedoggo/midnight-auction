@@ -2,14 +2,16 @@
   "id": "midnight-auction",
   "title": "Midnight Auction",
   "description": "A simple, playful auction interface for Foundry VTT. GMs build rounds and lots in-app, then players bid with instant table-wide updates.",
-  "version": "1.0.23",
+  "version": "1.0.24",
   "compatibility": {
     "minimum": "11",
     "verified": "11"
   },
   "authors": [
     {
-      "name": "Codex"
+      "name": "OpenKyle",
+      "discord": "OpenKyle",
+      "url": "https://github.com/openkyle"
     }
   ],
   "esmodules": [
