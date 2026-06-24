@@ -22,5 +22,5 @@ GitHub Actions will create a GitHub Release with:
 Foundry can use this manifest URL:
 
 ```text
-https://github.com/edgedoggo/midnight-auction/releases/latest/download/module.json
+https://github.com/openkyle/midnight-auction/releases/latest/download/module.json
 ```
