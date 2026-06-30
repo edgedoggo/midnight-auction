@@ -84,9 +84,21 @@
   color: #000000;
 }
 
-#sidebar-tabs .midnight-auction-sidebar-button {
-  display: grid;
-  place-items: center;
+#sidebar-tabs .midnight-auction-sidebar-button,
+#sidebar .midnight-auction-sidebar-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 var(--sidebar-tab-width, 32px);
+  width: var(--sidebar-tab-width, 32px);
+  height: var(--sidebar-tab-height, 32px);
+  min-width: 32px;
+  color: inherit;
+  cursor: pointer;
+}
+
+#sidebar .midnight-auction-sidebar-button i {
+  pointer-events: none;
 }
 
 .ma-auction-board {

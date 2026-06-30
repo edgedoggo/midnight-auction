@@ -678,26 +678,43 @@ function addSidebarButton() {
   }
   if (existing) return;
 
-  const tabs = document.getElementById("sidebar-tabs") || document.querySelector("#sidebar nav.tabs");
-  if (!tabs) return;
+  const tabs = getSidebarTabsElement();
+  if (!tabs) {
+    scheduleAuctionLauncherUpdate(250);
+    scheduleAuctionLauncherUpdate(1000);
+    return;
+  }
 
   const button = document.createElement("a");
   button.id = "midnight-auction-sidebar";
   button.className = "item midnight-auction-sidebar-button";
+  button.dataset.tab = "midnight-auction";
   button.title = "Open Midnight Auction";
   button.setAttribute("aria-label", "Open Midnight Auction");
   button.innerHTML = `<i class="fas fa-gavel"></i>`;
   button.addEventListener("click", (event) => {
     event.preventDefault();
-    event.stopPropagation();
+    event.stopImmediatePropagation();
     openAuction();
-  });
+  }, true);
   tabs.appendChild(button);
 }
 
 function updateAuctionLaunchers() {
   addFloatingButton();
   addSidebarButton();
+}
+
+function scheduleAuctionLauncherUpdate(delay = 0) {
+  window.setTimeout(() => updateAuctionLaunchers(), delay);
+}
+
+function getSidebarTabsElement() {
+  return document.getElementById("sidebar-tabs")
+    || document.querySelector("#sidebar-tabs")
+    || document.querySelector("#sidebar nav.tabs")
+    || document.querySelector("#sidebar .tabs")
+    || document.querySelector("#sidebar");
 }
 
 function registerModuleApi() {
@@ -2053,6 +2070,8 @@ Hooks.once("ready", async () => {
   await ensureMacros();
 });
 
-Hooks.on("renderSceneControls", () => updateAuctionLaunchers());
-Hooks.on("renderSidebar", () => updateAuctionLaunchers());
-Hooks.on("canvasReady", () => updateAuctionLaunchers());
+Hooks.on("renderSceneControls", () => scheduleAuctionLauncherUpdate());
+Hooks.on("renderSidebar", () => scheduleAuctionLauncherUpdate());
+Hooks.on("renderSidebarTab", () => scheduleAuctionLauncherUpdate());
+Hooks.on("collapseSidebar", () => scheduleAuctionLauncherUpdate(50));
+Hooks.on("canvasReady", () => scheduleAuctionLauncherUpdate());
